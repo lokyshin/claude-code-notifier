@@ -1,37 +1,104 @@
 #!/bin/bash
 # Claude Code Notifier
-# https://github.com/lokyshin/claude-code-notifier
+# https://github.com/YOUR_USERNAME/claude-code-notifier
 # License: MIT
-#
-# 用法：~/.claude/notify.sh <permission|done|error|tool> [自定义消息]
 
 TYPE=$1
 CUSTOM_MSG=$2
 CONFIG_FILE="${CLAUDE_NOTIFIER_CONFIG:-$HOME/.claude/notifier.conf}"
 
-# ============================================================
-# 加载配置
-# ============================================================
-if [ -f "$CONFIG_FILE" ]; then
-  source "$CONFIG_FILE"
-else
-  echo "⚠️  配置文件不存在: $CONFIG_FILE"
-  echo "请先运行 install.sh 或手动创建配置文件"
-  exit 1
-fi
+[ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 
 LOG_FILE="${LOG_FILE:-$HOME/.claude/notifier.log}"
 TOKEN_CACHE="$HOME/.claude/.feishu_token_cache"
 
 # ============================================================
-# 工具函数
+# 读取 stdin（Claude Code 传入的 Hook 上下文 JSON）
 # ============================================================
+STDIN_DATA=""
+if [ ! -t 0 ]; then
+  STDIN_DATA=$(cat)
+fi
+
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$TYPE] $1" >> "$LOG_FILE"
 }
 
 # ============================================================
-# 飞书 - 模式一：Webhook（企业版群机器人）
+# 解析 Hook 上下文
+# ============================================================
+parse_context() {
+  if [ -z "$STDIN_DATA" ]; then
+    echo ""
+    return
+  fi
+
+  local tool_name tool_input risk_level
+
+  # 用 python3 解析 JSON（兼容性最好）
+  tool_name=$(echo "$STDIN_DATA" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d.get('tool_name', ''))
+except: pass
+" 2>/dev/null)
+
+  tool_input=$(echo "$STDIN_DATA" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    inp = d.get('tool_input', {})
+    # 提取关键信息
+    if 'command' in inp:
+        print(inp['command'][:200])
+    elif 'file_path' in inp:
+        print(inp['file_path'])
+    elif 'path' in inp:
+        print(inp['path'])
+    else:
+        print(json.dumps(inp, ensure_ascii=False)[:200])
+except: pass
+" 2>/dev/null)
+
+  risk_level=$(echo "$STDIN_DATA" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d.get('risk_level', ''))
+except: pass
+" 2>/dev/null)
+
+  # 构造详细描述
+  local detail=""
+
+  if [ -n "$tool_name" ]; then
+    case "$tool_name" in
+      "Bash")     detail="🔧 操作类型: 执行 Shell 命令" ;;
+      "Write")    detail="📝 操作类型: 写入文件" ;;
+      "Read")     detail="📖 操作类型: 读取文件" ;;
+      "Edit")     detail="✏️ 操作类型: 编辑文件" ;;
+      *)          detail="🔧 操作类型: $tool_name" ;;
+    esac
+  fi
+
+  if [ -n "$tool_input" ]; then
+    detail="$detail\n📋 操作内容: $tool_input"
+  fi
+
+  if [ -n "$risk_level" ]; then
+    case "$risk_level" in
+      "high")   detail="$detail\n🔴 风险等级: 高" ;;
+      "medium") detail="$detail\n🟡 风险等级: 中" ;;
+      "low")    detail="$detail\n🟢 风险等级: 低" ;;
+    esac
+  fi
+
+  echo "$detail"
+}
+
+# ============================================================
+# 飞书 - 模式一：Webhook
 # ============================================================
 _feishu_send_webhook() {
   local title=$1 msg=$2 color=$3
@@ -66,24 +133,21 @@ _feishu_send_webhook() {
 }
 
 # ============================================================
-# 飞书 - 模式二：App（个人版，自动刷新 Token）
+# 飞书 - 模式二：App（自动刷新 Token）
 # ============================================================
 _feishu_get_token() {
-  # 读取缓存
   if [ -f "$TOKEN_CACHE" ]; then
     local cached_time cached_token current_time
     cached_time=$(awk -F'|' '{print $1}' "$TOKEN_CACHE")
     cached_token=$(awk -F'|' '{print $2}' "$TOKEN_CACHE")
     current_time=$(date +%s)
 
-    # 有效期 7200 秒，提前 600 秒刷新
     if [ $((current_time - cached_time)) -lt 6600 ] && [ -n "$cached_token" ]; then
       echo "$cached_token"
       return
     fi
   fi
 
-  # 缓存失效，重新请求
   local response token
   response=$(curl -s -X POST \
     'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal' \
@@ -101,7 +165,6 @@ _feishu_get_token() {
     return
   fi
 
-  # 写入缓存，限制文件权限
   echo "$(date +%s)|$token" > "$TOKEN_CACHE"
   chmod 600 "$TOKEN_CACHE"
   log "feishu[app] Token 刷新成功"
@@ -119,7 +182,6 @@ _feishu_send_app() {
     return
   fi
 
-  # 构建 card 内容并转义为 JSON 字符串
   card=$(cat <<EOF
 {
   "config": {"wide_screen_mode": true},
@@ -158,7 +220,7 @@ EOF
 }
 
 # ============================================================
-# 飞书 - 统一入口（根据 FEISHU_MODE 自动选择）
+# 飞书 - 统一入口
 # ============================================================
 send_feishu() {
   [ "${USE_FEISHU:-0}" -eq 0 ] && return
@@ -173,7 +235,6 @@ send_feishu() {
       fi
       _feishu_send_webhook "$title" "$msg" "$color"
       ;;
-
     "app")
       if [ -z "$FEISHU_APP_ID" ] || [ -z "$FEISHU_APP_SECRET" ] || [ -z "$FEISHU_RECEIVE_ID" ]; then
         log "feishu[app] App ID / Secret / Receive ID 未配置，跳过"
@@ -181,9 +242,8 @@ send_feishu() {
       fi
       _feishu_send_app "$title" "$msg" "$color"
       ;;
-
     *)
-      log "feishu 未知模式: ${FEISHU_MODE}，请设置为 webhook 或 app"
+      log "feishu 未知模式: ${FEISHU_MODE}"
       ;;
   esac
 }
@@ -247,9 +307,16 @@ notify_all() {
 # ============================================================
 case $TYPE in
   "permission")
+    # 解析 Claude Code 传入的上下文
+    CONTEXT=$(parse_context)
+    DETAIL_MSG="${CUSTOM_MSG:-Claude Code 正在请求权限，请回到终端确认操作！}"
+    if [ -n "$CONTEXT" ]; then
+      DETAIL_MSG="$DETAIL_MSG\n\n$CONTEXT"
+    fi
+
     notify_all \
       "⚠️ Claude 需要授权确认" \
-      "${CUSTOM_MSG:-Claude Code 正在请求权限，请回到终端确认操作！}" \
+      "$DETAIL_MSG" \
       "yellow"
     ;;
   "done")
@@ -265,9 +332,15 @@ case $TYPE in
       "red"
     ;;
   "tool")
+    CONTEXT=$(parse_context)
+    TOOL_MSG="${CUSTOM_MSG:-Claude Code 完成了一个工具调用}"
+    if [ -n "$CONTEXT" ]; then
+      TOOL_MSG="$TOOL_MSG\n\n$CONTEXT"
+    fi
+
     notify_all \
       "🔧 工具执行完成" \
-      "${CUSTOM_MSG:-Claude Code 完成了一个工具调用}" \
+      "$TOOL_MSG" \
       "grey"
     ;;
   *)
