@@ -1,0 +1,10 @@
+# 用户配置文件（含密钥，绝对不能提交）
+notifier.conf
+*.conf
+!*.conf.example
+
+# 日志
+*.log
+
+# 系统文件
+.DS_Store
