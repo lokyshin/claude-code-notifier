@@ -205,6 +205,43 @@ WXWORK_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
 
 ---
 
+## 远程审批（高级功能）
+
+在手机上直接审批 Claude Code 的权限请求，无需回到终端操作。
+
+```
+Claude Code → notify.sh → Flask 审批服务 → 飞书/微信通知（带链接）
+                                ↑                    ↓
+                          轮询获取结果 ←── 手机点击 允许/拒绝
+```
+
+### 快速部署
+
+```bash
+# 安装审批服务
+cd claude-code-notifier/approve-server
+pip3 install -r requirements.txt
+python3 app.py  # 监听端口 9120
+```
+
+### 配置
+
+```bash
+# 在 ~/.claude/notifier.conf 中添加
+USE_REMOTE_APPROVE=1
+APPROVE_SERVER="https://approve.yourdomain.com"
+```
+
+### 三种审批决策
+
+| 按钮 | 效果 |
+|------|------|
+| ✅ 允许本次 | 仅允许当前这一次操作 |
+| ✅ 始终允许 | 以后同类操作自动允许，不再询问 |
+| ❌ 拒绝 | 阻止当前操作 |
+
+→ 完整教程：[docs/remote-approve.md](docs/remote-approve.md)
+
 ## 环境要求
 
 - Bash 4+

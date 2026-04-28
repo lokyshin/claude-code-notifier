@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code 审批</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      padding: 16px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 0 auto 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-width: 540px;
+    }
+
+    .header { text-align: center; margin-bottom: 20px; }
+    .header h1 { font-size: 18px; margin-bottom: 4px; }
+    .header .subtitle { color: #888; font-size: 13px; }
+
+    /* 信息行 */
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { color: #888; flex-shrink: 0; }
+    .info-value { font-weight: 500; text-align: right; max-width: 65%; word-break: break-all; }
+
+    /* 风险等级 */
+    .risk-high { color: #e74c3c; font-weight: bold; }
+    .risk-medium { color: #f39c12; font-weight: bold; }
+    .risk-low { color: #27ae60; font-weight: bold; }
+
+    /* 代码块 */
+    .code-block {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 14px;
+      border-radius: 8px;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 12px;
+      margin: 12px 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 300px;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+
+    /* Diff 高亮 */
+    .diff-add { color: #98c379; }
+    .diff-del { color: #e06c75; }
+    .diff-info { color: #61afef; }
+
+    /* 文件路径 */
+    .file-path {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #f0f0f0;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 13px;
+      margin: 8px 0;
+      word-break: break-all;
+    }
+
+    /* 操作类型图标 */
+    .tool-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .tool-bash { background: #e8f5e9; color: #2e7d32; }
+    .tool-write { background: #e3f2fd; color: #1565c0; }
+    .tool-edit { background: #fff3e0; color: #ef6c00; }
+    .tool-read { background: #f3e5f5; color: #7b1fa2; }
+    .tool-other { background: #f5f5f5; color: #616161; }
+
+    /* 三个按钮 */
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-approve {
+      background: #27ae60;
+      color: white;
+    }
+    .btn-always {
+      background: #2980b9;
+      color: white;
+    }
+    .btn-reject {
+      background: #e74c3c;
+      color: white;
+    }
+    .btn-disabled {
+      background: #ddd !important;
+      color: #999 !important;
+      cursor: not-allowed;
+    }
+
+    .btn-hint {
+      font-size: 11px;
+      font-weight: 400;
+      opacity: 0.8;
+    }
+
+    /* 状态 */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-approved { background: #d4edda; color: #155724; }
+    .status-rejected { background: #f8d7da; color: #721c24; }
+
+    .result-message {
+      text-align: center;
+      padding: 20px;
+      font-size: 18px;
+      display: none;
+    }
+
+    .error-card { text-align: center; color: #888; padding: 40px 20px; }
+
+    /* Tab 切换 */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid #eee;
+      margin-bottom: 12px;
+    }
+    .tab-item {
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #888;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+    }
+    .tab-item.active {
+      color: #333;
+      border-bottom-color: #2980b9;
+      font-weight: 600;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Dashboard */
+    .pending-list { max-width: 540px; margin: 0 auto; }
+    .pending-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: #fff;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      text-decoration: none;
+      color: inherit;
+    }
+    .pending-item:hover { background: #f8f8f8; }
+    .pending-meta { font-size: 12px; color: #888; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+{% if error %}
+  <div class="card error-card">
+    <h2>⏰</h2>
+    <p style="margin-top: 12px">{{ error }}</p>
+  </div>
+
+{% elif dashboard %}
+  <div class="header">
+    <h1>🔔 Claude Code 审批中心</h1>
+    <p class="subtitle">待处理: {{ pending|length }} 项</p>
+  </div>
+
+  <div class="pending-list">
+    {% if pending %}
+      {% for rid, item in pending.items() %}
+        <a class="pending-item" href="/approve/{{ rid }}">
+          <div>
+            <strong>{{ item.project }}</strong>
+            {% set tool_class = {'Bash': 'tool-bash', 'Write': 'tool-write', 'Edit': 'tool-edit', 'Read': 'tool-read'} %}
+            <span class="tool-badge {{ tool_class.get(item.tool_name, 'tool-other') }}">
+              {{ item.tool_name }}
+            </span>
+            <div class="pending-meta">
+              🖥️ {{ item.hostname }}
+              {% if item.tool_input %}
+                ·
+                {% if item.tool_input is mapping %}
+                  {{ (item.tool_input.get('command', '') or item.tool_input.get('file_path', ''))[:60] }}
+                {% else %}
+                  {{ item.tool_input[:60] }}
+                {% endif %}
+              {% endif %}
+            </div>
+          </div>
+          <span class="status-badge status-pending">待审批</span>
+        </a>
+      {% endfor %}
+    {% else %}
+      <div class="card error-card">
+        <p>暂无待审批请求 ✨</p>
+      </div>
+    {% endif %}
+
+    {% if recent %}
+      <h3 style="margin: 24px 0 12px; font-size: 14px; color: #888;">最近记录</h3>
+      {% for rid, item in recent.items() %}
+        <a class="pending-item" href="/approve/{{ rid }}">
+          <div>
+            <strong>{{ item.project }}</strong> · {{ item.tool_name }}
+            <div class="pending-meta">🖥️ {{ item.hostname }}</div>
+          </div>
+          <span class="status-badge status-{{ item.status }}">
+            {% if item.status == 'pending' %}待审批
+            {% elif item.status == 'approved' %}已允许
+            {% else %}已拒绝{% endif %}
+          </span>
+        </a>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+{% elif data %}
+  <div class="card">
+    <div class="header">
+      <h1>⚠️ Claude 请求权限</h1>
+      <p class="subtitle">请审批以下操作</p>
+    </div>
+
+    <!-- 基本信息 -->
+    <div class="info-row">
+      <span class="info-label">项目</span>
+      <span class="info-value">{{ data.project }}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">服务器</span>
+      <span class="info-value">🖥️ {{ data.hostname }}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">操作类型</span>
+      <span class="info-value">
+        {% set tool_icons = {'Bash': '🔧 执行命令', 'Write': '📝 写入文件', 'Edit': '✏️ 编辑文件', 'Read': '📖 读取文件'} %}
+        {% set tool_class = {'Bash': 'tool-bash', 'Write': 'tool-write', 'Edit': 'tool-edit', 'Read': 'tool-read'} %}
+        <span class="tool-badge {{ tool_class.get(data.tool_name, 'tool-other') }}">
+          {{ tool_icons.get(data.tool_name, '🔧 ' + data.tool_name) }}
+        </span>
+      </span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">风险等级</span>
+      <span class="info-value risk-{{ data.risk_level }}">
+        {% if data.risk_level == 'high' %}🔴 高风险
+        {% elif data.risk_level == 'medium' %}🟡 中风险
+        {% else %}🟢 低风险{% endif %}
+      </span>
+    </div>
+
+    <!-- 操作详情：根据 tool_name 展示不同内容 -->
+
+    {% if data.tool_name == 'Bash' %}
+      <!-- Shell 命令 -->
+      <div style="margin-top: 12px; font-size: 13px; color: #888;">执行命令：</div>
+      <div class="code-block">{{ data.tool_input.get('command', data.tool_input) if data.tool_input is mapping else data.tool_input }}</div>
+
+    {% elif data.tool_name == 'Write' %}
+      <!-- 写入文件 -->
+      {% if data.file_path %}
+        <div class="file-path">📄 {{ data.file_path }}</div>
+      {% endif %}
+
+      {% if data.file_content %}
+        <div class="tab-bar">
+          <div class="tab-item active" onclick="switchTab(this, 'content-tab')">文件内容</div>
+          {% if data.tool_input %}
+            <div class="tab-item" onclick="switchTab(this, 'raw-tab')">原始数据</div>
+          {% endif %}
+        </div>
+        <div id="content-tab" class="tab-content active">
+          <div class="code-block">{{ data.file_content[:3000] }}{% if data.file_content|length > 3000 %}
+...（内容过长，已截断）{% endif %}</div>
+        </div>
+        {% if data.tool_input %}
+          <div id="raw-tab" class="tab-content">
+            <div class="code-block">{{ data.tool_input if data.tool_input is string else data.tool_input|tojson(indent=2) }}</div>
+          </div>
+        {% endif %}
+      {% else %}
+        <div class="code-block">{{ data.tool_input if data.tool_input is string else data.tool_input|tojson(indent=2) }}</div>
+      {% endif %}
+
+    {% elif data.tool_name == 'Edit' %}
+      <!-- 编辑文件（带 Diff） -->
+      {% if data.file_path %}
+        <div class="file-path">📄 {{ data.file_path }}</div>
+      {% endif %}
+
+      {% if data.diff_content %}
+        <div class="tab-bar">
+          <div class="tab-item active" onclick="switchTab(this, 'diff-tab')">Diff 对比</div>
+          <div class="tab-item" onclick="switchTab(this, 'raw-tab')">原始数据</div>
+        </div>
+        <div id="diff-tab" class="tab-content active">
+          <div class="code-block" id="diffView"></div>
+        </div>
+        <div id="raw-tab" class="tab-content">
+          <div class="code-block">{{ data.tool_input if data.tool_input is string else data.tool_input|tojson(indent=2) }}</div>
+        </div>
+      {% else %}
+        <div class="code-block">{{ data.tool_input if data.tool_input is string else data.tool_input|tojson(indent=2) }}</div>
+      {% endif %}
+
+    {% else %}
+      <!-- 其他工具 -->
+      <div class="code-block">{{ data.tool_input if data.tool_input is string else data.tool_input|tojson(indent=2) }}</div>
+    {% endif %}
+
+    <!-- 状态 -->
+    <div class="info-row">
+      <span class="info-label">当前状态</span>
+      <span class="status-badge status-{{ data.status }}">
+        {% if data.status == 'pending' %}⏳ 待审批
+        {% elif data.status == 'approved' %}
+          {% if data.decision == 'always' %}✅ 已允许（始终）
+          {% else %}✅ 已允许（本次）{% endif %}
+        {% else %}❌ 已拒绝{% endif %}
+      </span>
+    </div>
+
+    <!-- 按钮组 -->
+    {% if data.status == 'pending' %}
+    <div class="btn-group" id="btnGroup">
+      <button class="btn btn-approve" onclick="submitAction('approve')">
+        ✅ 允许本次
+        <span class="btn-hint">（仅允许这一次操作）</span>
+      </button>
+      <button class="btn btn-always" onclick="submitAction('always')">
+        ✅ 始终允许
+        <span class="btn-hint">（以后同类操作自动允许）</span>
+      </button>
+      <button class="btn btn-reject" onclick="submitAction('reject')">
+        ❌ 拒绝
+        <span class="btn-hint">（阻止此操作）</span>
+      </button>
+    </div>
+    {% endif %}
+
+    <div class="result-message" id="resultMsg"></div>
+  </div>
+
+  <script>
+    // Tab 切换
+    function switchTab(el, tabId) {
+      el.parentElement.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      el.parentElement.parentElement.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    // Diff 高亮渲染
+    {% if data.diff_content %}
+    (function() {
+      const diffRaw = {{ data.diff_content|tojson }};
+      const container = document.getElementById('diffView');
+      if (container && diffRaw) {
+        const lines = diffRaw.split('\n');
+        container.innerHTML = lines.map(line => {
+          if (line.startsWith('+') && !line.startsWith('+++')) {
+            return `<span class="diff-add">${escapeHtml(line)}</span>`;
+          } else if (line.startsWith('-') && !line.startsWith('---')) {
+            return `<span class="diff-del">${escapeHtml(line)}</span>`;
+          } else if (line.startsWith('@@')) {
+            return `<span class="diff-info">${escapeHtml(line)}</span>`;
+          }
+          return escapeHtml(line);
+        }).join('\n');
+      }
+    })();
+    {% endif %}
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // 提交审批
+    async function submitAction(action) {
+      const btnGroup = document.getElementById('btnGroup');
+      const resultMsg = document.getElementById('resultMsg');
+
+      btnGroup.querySelectorAll('.btn').forEach(b => {
+        b.classList.add('btn-disabled');
+        b.disabled = true;
+      });
+
+      try {
+        const res = await fetch('/api/approve/{{ request_id }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        const data = await res.json();
+
+        btnGroup.style.display = 'none';
+        resultMsg.style.display = 'block';
+        resultMsg.textContent = data.message;
+      } catch (e) {
+        resultMsg.style.display = 'block';
+        resultMsg.textContent = '⚠️ 提交失败，请重试';
+        btnGroup.querySelectorAll('.btn').forEach(b => {
+          b.classList.remove('btn-disabled');
+          b.disabled = false;
+        });
+      }
+    }
+  </script>
+
+{% endif %}
+
+</body>
+</html>

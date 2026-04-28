@@ -198,6 +198,43 @@ To configure manually, add to `~/.claude/settings.json`:
 
 ---
 
+## Remote Approval (Advanced)
+
+Approve Claude Code permission requests directly from your phone — no need to go back to the terminal.
+
+```
+Claude Code → notify.sh → Flask Server → Phone Notification (with link)
+                                ↑               ↓
+                          Poll for result ← Tap Approve/Reject on phone
+```
+
+### Quick Setup
+
+```bash
+# Install approval server
+cd claude-code-notifier/approve-server
+pip3 install -r requirements.txt
+python3 app.py  # listens on port 9120
+```
+
+### Configure
+
+```bash
+# In ~/.claude/notifier.conf
+USE_REMOTE_APPROVE=1
+APPROVE_SERVER="https://approve.yourdomain.com"
+```
+
+### Three Decisions
+
+| Button | Effect |
+|--------|--------|
+| ✅ Allow Once | Approve this single operation |
+| ✅ Always Allow | Auto-approve this type of operation going forward |
+| ❌ Reject | Block the operation |
+
+→ Full guide: [docs/remote-approve.md](docs/remote-approve.md)
+
 ## Requirements
 
 - Bash 4+

@@ -1,4 +1,4 @@
-# 用户配置文件（含密钥，绝对不能提交）
+# 用户配置文件（含密钥）
 notifier.conf
 *.conf
 !*.conf.example
@@ -6,5 +6,18 @@ notifier.conf
 # 日志
 *.log
 
+# Token 缓存
+.feishu_token_cache
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+.env
+
 # 系统文件
 .DS_Store
+Thumbs.db
