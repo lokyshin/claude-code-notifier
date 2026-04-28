@@ -128,6 +128,60 @@
 
 
 # ────────────────────────────────────────────────────────────
+# 远程审批（高级功能，可选）
+# ────────────────────────────────────────────────────────────
+#
+# 开启后，Claude Code 请求权限时：
+#   1. 推送通知到手机（带审批链接）
+#   2. 你在手机上点击链接打开审批页面
+#   3. 选择「允许本次 / 始终允许 / 拒绝」
+#   4. 脚本自动获取结果并返回给 Claude Code
+#
+# 前提条件：
+#   1. 部署 Flask 审批服务（参考 docs/remote-approve.md）
+#   2. 配置 Nginx 反向代理到你的域名（或直接用公网 IP + 端口）
+#   3. 手机能访问到该地址
+#
+# 如果不需要远程审批，保持 USE_REMOTE_APPROVE=0 即可
+# 通知功能不受影响，仍然正常推送到飞书/微信/企业微信
+#
+#
+# USE_REMOTE_APPROVE=1
+#
+# APPROVE_SERVER 填写你手机最终能访问到的完整地址
+# ⚠️ 不是 localhost，不是 127.0.0.1
+# 而是经过 Nginx 反代 / 内网穿透后的公网可达地址
+#
+# 示例（根据你的实际部署方式选择）：
+#
+#   独立子域名（推荐）：
+#   APPROVE_SERVER="https://approve.example.com"
+#
+#   子路径挂载（已有域名，加一个路径）：
+#   APPROVE_SERVER="https://yourdomain.com/claude-approve"
+#
+#   公网 IP 直接访问（不推荐，无 HTTPS）：
+#   APPROVE_SERVER="http://your-public-ip:9120"
+#
+#   内网直接访问（仅同局域网可用）：
+#   APPROVE_SERVER="http://192.168.1.100:9120"
+#
+# APPROVE_SERVER="https://approve.yourdomain.com"
+#
+# APPROVE_TIMEOUT=300     # 等待审批超时（秒），超时自动拒绝，默认 5 分钟
+# APPROVE_INTERVAL=3      # 轮询间隔（秒），默认 3 秒
+#
+#
+# Flask 审批服务本地监听配置
+# 仅在审批服务运行的机器上生效，不影响上面的 APPROVE_SERVER 地址
+# 默认监听 127.0.0.1:9120，通过 Nginx 反代对外暴露
+# 也可以通过环境变量覆盖：APPROVE_HOST=0.0.0.0 APPROVE_PORT=9120 python3 app.py
+#
+# APPROVE_LISTEN_HOST="127.0.0.1"
+# APPROVE_LISTEN_PORT="9120"
+
+
+# ────────────────────────────────────────────────────────────
 # 日志路径
 # ────────────────────────────────────────────────────────────
 LOG_FILE="$HOME/.claude/notifier.log"
@@ -136,6 +190,8 @@ LOG_FILE="$HOME/.claude/notifier.log"
 # ============================================================
 # 我的配置（将你选择的场景粘贴到这里，取消注释并填入真实值）
 # ============================================================
+
+# ── 通知渠道（至少启用一个）──
 
 USE_FEISHU=0
 FEISHU_MODE=""
@@ -150,3 +206,10 @@ SERVERCHAN_KEY=""
 
 USE_WXWORK=0
 WXWORK_WEBHOOK=""
+
+# ── 远程审批（可选）──
+
+USE_REMOTE_APPROVE=0
+APPROVE_SERVER=""
+APPROVE_TIMEOUT=300
+APPROVE_INTERVAL=3

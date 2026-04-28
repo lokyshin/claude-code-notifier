@@ -271,17 +271,6 @@ notify_all() {
 
 ---
 
-## Contributing
-
-PRs are welcome! Channels planned:
-
-- [ ] Telegram Bot
-- [ ] Bark (iOS)
-- [ ] Ntfy
-- [ ] DingTalk 钉钉
-
----
-
 ## License
 
 MIT © 2026

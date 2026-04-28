@@ -1,14 +1,9 @@
 """
 Claude Code Remote Approval Server v2
-https://github.com/YOUR_USERNAME/claude-code-notifier
-
-支持：
-- 三种决策（允许一次 / 始终允许 / 拒绝）
-- 多实例并发
-- 操作详情展示（命令 / 文件内容 / Diff）
-- 自动清理过期请求
+https://github.com/lokyshin/claude-code-notifier
 """
 
+import os
 import time
 import threading
 from flask import Flask, request, jsonify, render_template
@@ -18,11 +13,10 @@ app = Flask(__name__)
 approve_store = {}
 store_lock = threading.Lock()
 
-EXPIRE_SECONDS = 1800  # 30 分钟自动过期
+EXPIRE_SECONDS = int(os.environ.get("APPROVE_EXPIRE", 1800))
 
 
 def cleanup_expired():
-    """定期清理过期请求"""
     while True:
         time.sleep(60)
         now = time.time()
@@ -39,8 +33,6 @@ def cleanup_expired():
 cleanup_thread = threading.Thread(target=cleanup_expired, daemon=True)
 cleanup_thread.start()
 
-
-# ── API: 创建审批请求 ──────────────────────────────────────
 
 @app.route("/api/request", methods=["POST"])
 def create_request():
@@ -74,8 +66,6 @@ def create_request():
     })
 
 
-# ── API: 查询状态 ──────────────────────────────────────────
-
 @app.route("/api/status/<request_id>", methods=["GET"])
 def get_status(request_id):
     with store_lock:
@@ -89,8 +79,6 @@ def get_status(request_id):
             "request_id": request_id,
         })
 
-
-# ── API: 提交审批 ──────────────────────────────────────────
 
 @app.route("/api/approve/<request_id>", methods=["POST"])
 def submit_approval(request_id):
@@ -131,8 +119,6 @@ def submit_approval(request_id):
     })
 
 
-# ── 页面: 审批操作 ─────────────────────────────────────────
-
 @app.route("/approve/<request_id>")
 def approve_page(request_id):
     with store_lock:
@@ -151,8 +137,6 @@ def approve_page(request_id):
         request_id=request_id,
     )
 
-
-# ── 页面: 仪表盘 ──────────────────────────────────────────
 
 @app.route("/")
 def dashboard():
@@ -180,4 +164,15 @@ def dashboard():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=9120, debug=False)
+    host = os.environ.get("APPROVE_HOST", "127.0.0.1")
+    port = int(os.environ.get("APPROVE_PORT", 9120))
+    debug = os.environ.get("APPROVE_DEBUG", "false").lower() == "true"
+
+    print(f"🚀 Claude Code Approval Server")
+    print(f"   Listening on {host}:{port}")
+    print(f"   Dashboard: http://{host}:{port}/")
+    print(f"")
+    print(f"   ⚠️  请通过 Nginx 反向代理对外暴露")
+    print(f"   配置 APPROVE_SERVER 为你的公网域名")
+
+    app.run(host=host, port=port, debug=debug)

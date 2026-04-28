@@ -1,6 +1,6 @@
 #!/bin/bash
 # Claude Code Notifier
-# https://github.com/YOUR_USERNAME/claude-code-notifier
+# https://github.com/lokyshin/claude-code-notifier
 # License: MIT
 
 TYPE=$1

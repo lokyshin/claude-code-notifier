@@ -311,17 +311,6 @@ notify_all() {
 
 ---
 
-## 参与贡献
-
-欢迎提交 PR！期待支持更多渠道：
-
-- [ ] Telegram Bot
-- [ ] Bark（iOS）
-- [ ] Ntfy
-- [ ] 钉钉机器人
-
----
-
 ## License
 
 MIT © 2026
