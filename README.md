@@ -181,4 +181,4 @@ PRs are welcome! Ideas for new channels:
 
 ## License
 
-MIT © 2025
+MIT © 2026

@@ -200,4 +200,4 @@ A：在 `settings.json` 中用 `matcher` 指定特定工具，例如只监听 `"
 
 ## License
 
-MIT © 2025
+MIT © 2026
