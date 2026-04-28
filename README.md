@@ -28,13 +28,14 @@ Claude Code (Remote Linux Server)
 
 ## Supported Channels
 
-| Channel | Platform | Best For |
-|---------|----------|----------|
-| **Feishu 飞书** | Feishu App | Enterprise / Personal |
-| **Server Chan 方糖** | WeChat | Personal |
-| **WxWork Bot 企业微信** | WeChat Work | Enterprise |
+| Channel | Platform | Best For | Limit |
+|---------|----------|----------|-------|
+| **Feishu Webhook** | Feishu App | Enterprise users | Unlimited |
+| **Feishu App** | Feishu App | Personal users | Unlimited |
+| **Server Chan** | WeChat | Personal users | 5/day (free) |
+| **WxWork Bot** | WeChat Work | Enterprise users | 20/min |
 
-> Multiple channels can be enabled at the same time.
+> Multiple channels can be enabled simultaneously.
 
 ---
 
@@ -51,7 +52,7 @@ claude-code-notifier/
 ├── settings.example.json     ← Claude Code hook config
 ├── .gitignore
 └── docs/
-    ├── feishu.md             ← Feishu setup guide
+    ├── feishu.md             ← Feishu setup guide (both modes)
     ├── serverchan.md         ← Server Chan setup guide
     └── wxwork.md             ← WxWork setup guide
 ```
@@ -91,13 +92,50 @@ tail -f ~/.claude/notifier.log
 
 ---
 
+## Feishu: Two Modes
+
+Feishu (Lark) supports two integration modes depending on your account type:
+
+### Mode 1 — Webhook (Enterprise accounts)
+
+```bash
+# Add a custom bot in any Feishu group → copy the Webhook URL
+FEISHU_MODE="webhook"
+FEISHU_WEBHOOK="https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_TOKEN"
+```
+
+### Mode 2 — App (Personal accounts)
+
+> Personal Feishu accounts cannot create group bots.  
+> Use an Open Platform app instead — token is refreshed automatically.
+
+```bash
+# Create an app at https://open.feishu.cn/app
+FEISHU_MODE="app"
+FEISHU_APP_ID="cli_xxxxxxxxxxxxxxxx"
+FEISHU_APP_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+FEISHU_RECEIVE_TYPE="chat_id"           # chat_id (group) or open_id (personal)
+FEISHU_RECEIVE_ID="oc_xxxxxxxxxxxxxxxx"
+```
+
+Token cache mechanism:
+```
+First call → fetch token (valid 7200s) → cache to ~/.claude/.feishu_token_cache
+Next calls → read cache → auto refresh 10 min before expiry
+```
+
+→ Full guide: [docs/feishu.md](docs/feishu.md)
+
+---
+
 ## Configuration
 
 After installation, edit `~/.claude/notifier.conf`:
 
 ```bash
-# ── Feishu Bot ──────────────────────────────────────────────
+# ── Feishu ──────────────────────────────────────────────────
 USE_FEISHU=1
+FEISHU_MODE="webhook"                   # webhook or app
 FEISHU_WEBHOOK="https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_TOKEN"
 
 # ── Server Chan (WeChat) ────────────────────────────────────
@@ -109,7 +147,8 @@ USE_WXWORK=0
 WXWORK_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
 ```
 
-Set the channel you want to `1`, leave others at `0`.
+Set the channels you want to `1`, leave others at `0`.  
+Multiple channels can be active at the same time.
 
 ---
 
@@ -153,7 +192,7 @@ To configure manually, add to `~/.claude/settings.json`:
 
 ## Channel Setup Guides
 
-- [Feishu Bot Setup](docs/feishu.md)
+- [Feishu Setup (Webhook + App modes)](docs/feishu.md)
 - [Server Chan Setup](docs/serverchan.md)
 - [WxWork Bot Setup](docs/wxwork.md)
 
@@ -163,14 +202,41 @@ To configure manually, add to `~/.claude/settings.json`:
 
 - Bash 4+
 - `curl` (pre-installed on most Linux distros)
+- `python3` (for Feishu App mode JSON escaping)
 - A Claude Code installation
-- One of the supported notification channels
+- At least one notification channel configured
+
+---
+
+## Adding a New Channel
+
+All channel logic is in `notify.sh`. To add a new channel:
+
+```bash
+# 1. Add config in notifier.conf.example
+USE_NEWCHANNEL=0
+NEWCHANNEL_KEY="YOUR_KEY"
+
+# 2. Add send function in notify.sh
+send_newchannel() {
+  [ "${USE_NEWCHANNEL:-0}" -eq 0 ] && return
+  curl -s ...
+}
+
+# 3. Call it inside notify_all()
+notify_all() {
+  ...
+  send_newchannel "$$title" "$$msg"
+}
+```
+
+> `settings.json` never needs to change when adding channels.
 
 ---
 
 ## Contributing
 
-PRs are welcome! Ideas for new channels:
+PRs are welcome! Channels planned:
 
 - [ ] Telegram Bot
 - [ ] Bark (iOS)
