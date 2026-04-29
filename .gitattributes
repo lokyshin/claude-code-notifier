@@ -1,0 +1,17 @@
+# 所有文本文件：提交时统一转为 LF，checkout 时各平台自适应
+* text=auto eol=lf
+
+# Shell 脚本和 Linux 运行文件：强制 LF，绝不转换
+*.sh        text eol=lf
+*.service   text eol=lf
+*.conf      text eol=lf
+
+# Windows 批处理脚本（如果有的话）：强制 CRLF
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# 二进制文件：不做任何处理
+*.png       binary
+*.jpg       binary
+*.gz        binary
+*.zip       binary

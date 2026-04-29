@@ -9,6 +9,7 @@ import threading
 from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__)
+app.json.ensure_ascii = False
 
 approve_store = {}
 store_lock = threading.Lock()
@@ -43,6 +44,8 @@ def create_request():
 
     request_id = data["request_id"]
 
+    request_type = data.get("request_type", "permission")
+
     with store_lock:
         approve_store[request_id] = {
             "status": "pending",
@@ -57,6 +60,12 @@ def create_request():
             "file_path": data.get("file_path", ""),
             "file_content": data.get("file_content", ""),
             "diff_content": data.get("diff_content", ""),
+            "request_type": request_type,
+            "questions": data.get("questions", []),
+            "option_index": None,
+            "option_indices": None,
+            "tui_options": data.get("tui_options", []),
+            "inject_key": None,
         }
 
     return jsonify({
@@ -73,11 +82,19 @@ def get_status(request_id):
             return jsonify({"status": "expired"})
 
         data = approve_store[request_id]
-        return jsonify({
+        resp = {
             "status": data["status"],
             "decision": data["decision"],
             "request_id": request_id,
-        })
+            "request_type": data.get("request_type", "permission"),
+        }
+        if data.get("option_index") is not None:
+            resp["option_index"] = data["option_index"]
+        if data.get("option_indices") is not None:
+            resp["option_indices"] = data["option_indices"]
+        if data.get("inject_key") is not None:
+            resp["inject_key"] = data["inject_key"]
+        return jsonify(resp)
 
 
 @app.route("/api/approve/<request_id>", methods=["POST"])
@@ -105,6 +122,8 @@ def submit_approval(request_id):
         approve_store[request_id]["status"] = status
         approve_store[request_id]["decision"] = decision
         approve_store[request_id]["resolved_at"] = time.time()
+        if "inject_key" in data:
+            approve_store[request_id]["inject_key"] = data["inject_key"]
 
     messages = {
         "approve": "✅ 已允许（本次）",
@@ -116,6 +135,48 @@ def submit_approval(request_id):
         "status": status,
         "decision": decision,
         "message": messages[action],
+    })
+
+
+@app.route("/api/answer/<request_id>", methods=["POST"])
+def submit_answer(request_id):
+    data = request.get_json()
+    action = data.get("action", "")
+
+    with store_lock:
+        if request_id not in approve_store:
+            return jsonify({"error": "Request not found or expired"}), 404
+
+        if approve_store[request_id]["status"] != "pending":
+            return jsonify({"error": "Request already resolved"}), 409
+
+        if action == "select":
+            approve_store[request_id]["status"] = "approved"
+            approve_store[request_id]["decision"] = "option"
+            approve_store[request_id]["resolved_at"] = time.time()
+            if "option_index" in data:
+                approve_store[request_id]["option_index"] = data["option_index"]
+                approve_store[request_id]["inject_key"] = str(data["option_index"] + 1)
+            if "option_indices" in data:
+                approve_store[request_id]["option_indices"] = data["option_indices"]
+            msg = "✅ 已选择选项"
+        elif action == "tui":
+            approve_store[request_id]["status"] = "approved"
+            approve_store[request_id]["decision"] = "tui"
+            approve_store[request_id]["resolved_at"] = time.time()
+            msg = "📱 请到终端操作"
+        elif action == "reject":
+            approve_store[request_id]["status"] = "rejected"
+            approve_store[request_id]["decision"] = "reject"
+            approve_store[request_id]["resolved_at"] = time.time()
+            msg = "❌ 已拒绝"
+        else:
+            return jsonify({"error": "action must be select / tui / reject"}), 400
+
+    return jsonify({
+        "status": approve_store[request_id]["status"],
+        "decision": approve_store[request_id]["decision"],
+        "message": msg,
     })
 
 

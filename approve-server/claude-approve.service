@@ -1,0 +1,16 @@
+[Unit]
+Description=Claude Code Approval Server
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/.claude/approve-server
+ExecStart=/home/YOUR_USERNAME/.claude/approve-server/venv/bin/gunicorn -w 1 --threads 2 -b 0.0.0.0:9120 app:app
+Restart=always
+RestartSec=5
+Environment=APPROVE_HOST=0.0.0.0
+Environment=APPROVE_PORT=9120
+
+[Install]
+WantedBy=multi-user.target

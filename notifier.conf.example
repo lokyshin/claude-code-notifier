@@ -1,215 +1,32 @@
 # ============================================================
-# Claude Code Notifier - 配置文件模板
-#
-# 使用方法：
-#   cp notifier.conf.example ~/.claude/notifier.conf
-#   nano ~/.claude/notifier.conf
-#
-# 飞书共有三种使用场景，选择其中一种，复制到文件末尾的「我的配置」区域
+# Claude Code Notifier - 配置文件示例
+# 复制为 ~/.claude/notifier.conf 并填入你的真实值
 # ============================================================
 
+# ── 飞书通知 ──
+USE_FEISHU=1
+FEISHU_MODE="app"                          # webhook 或 app
+# webhook 模式
+FEISHU_WEBHOOK="https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_TOKEN"
+# app 模式
+FEISHU_APP_ID="YOUR_APP_ID"
+FEISHU_APP_SECRET="YOUR_APP_SECRET"
+FEISHU_RECEIVE_TYPE="open_id"              # open_id / chat_id / user_id
+FEISHU_RECEIVE_ID="YOUR_RECEIVE_ID"
 
-# ────────────────────────────────────────────────────────────
-# 不确定自己属于哪种场景？
-#
-#   打开飞书任意群 → 右上角设置
-#   ├── 能看到「群机器人」选项 → 你是企业版用户 → 选场景 A
-#   └── 没有「群机器人」选项   → 你是个人版用户
-#       ├── 想推送到某个群     → 选场景 B
-#       └── 想推送给自己       → 选场景 C（推荐）
-#
-# ────────────────────────────────────────────────────────────
-
-
-# ============================================================
-# 场景 A：企业版飞书 — 群机器人 Webhook（最简单）
-# ============================================================
-#
-# 适合：企业版飞书用户，消息推送到群聊
-#
-# 获取 Webhook URL：
-#   1. 打开飞书群 → 右上角「设置」→「群机器人」→「添加机器人」
-#   2. 选择「自定义机器人」，填写机器人名称
-#   3. 复制生成的 Webhook URL，格式如下：
-#      https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-#   4. 将完整 URL 填入 FEISHU_WEBHOOK
-#
-# 详细教程：docs/feishu.md
-#
-# USE_FEISHU=1
-# FEISHU_MODE="webhook"
-# FEISHU_WEBHOOK="https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-
-
-# ============================================================
-# 场景 B：个人版飞书 — 机器人应用推送到群聊
-# ============================================================
-#
-# 适合：个人版飞书用户，消息推送到指定群聊
-#
-# 获取 App ID / App Secret：
-#   1. 浏览器访问 https://open.feishu.cn/app → 创建「企业自建应用」
-#   2. 填写应用名称（如：Claude Notifier）
-#   3. 进入应用 →「凭证与基础信息」→ 复制 App ID 和 App Secret
-#   4. 「权限管理」→ 搜索并开通：im:message:send_as_bot
-#   5. 「版本管理与发布」→ 创建版本 → 申请发布（个人版无需审核）
-#
-# 获取群 chat_id：
-#   参考 docs/feishu.md 中「获取 chat_id」章节
-#   格式：oc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-#
-# 详细教程：docs/feishu.md
-#
-# USE_FEISHU=1
-# FEISHU_MODE="app"
-# FEISHU_APP_ID="cli_xxxxxxxxxxxxxxxx"
-# FEISHU_APP_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-# FEISHU_RECEIVE_TYPE="chat_id"
-# FEISHU_RECEIVE_ID="oc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-
-# ============================================================
-# 场景 C：个人版飞书 — 机器人应用推送给自己（推荐）
-# ============================================================
-#
-# 适合：个人版飞书用户，消息直接推送到自己的飞书账号
-#
-# 获取 App ID / App Secret：（同场景 B 步骤 1-5）
-#   1. 浏览器访问 https://open.feishu.cn/app → 创建「企业自建应用」
-#   2. 填写应用名称（如：Claude Notifier）
-#   3. 进入应用 →「凭证与基础信息」→ 复制 App ID 和 App Secret
-#   4. 「权限管理」→ 搜索并开通：im:message:send_as_bot
-#   5. 「版本管理与发布」→ 创建版本 → 申请发布（个人版无需审核）
-#
-# 获取自己的 open_id：
-#   参考 docs/feishu.md 中「获取 open_id」章节
-#   格式：ou_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-#
-# 详细教程：docs/feishu.md
-#
-# USE_FEISHU=1
-# FEISHU_MODE="app"
-# FEISHU_APP_ID="cli_xxxxxxxxxxxxxxxx"
-# FEISHU_APP_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-# FEISHU_RECEIVE_TYPE="open_id"
-# FEISHU_RECEIVE_ID="ou_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-
-# ────────────────────────────────────────────────────────────
-# Server酱（个人微信推送）
-# ────────────────────────────────────────────────────────────
-#
-# 适合：想通过个人微信接收通知
-#
-# 获取 SendKey：
-#   1. 访问 https://sct.ftqq.com，微信扫码登录
-#   2. 复制 SendKey（格式：SCT_xxxxxxxxxxxxxxxxxx）
-#   3. 微信关注「方糖」公众号即可接收推送
-#
-# 详细教程：docs/serverchan.md
-#
-# USE_SERVERCHAN=1
-# SERVERCHAN_KEY="SCT_xxxxxxxxxxxxxxxxxx"
-
-
-# ────────────────────────────────────────────────────────────
-# 企业微信机器人
-# ────────────────────────────────────────────────────────────
-#
-# 适合：企业微信用户，消息推送到企业微信群
-#
-# 获取 Webhook：
-#   企业微信群 → 右键群名 → 添加群机器人 → 新建机器人 → 复制 Webhook
-#
-# 详细教程：docs/wxwork.md
-#
-# USE_WXWORK=1
-# WXWORK_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-
-
-# ────────────────────────────────────────────────────────────
-# 远程审批（高级功能，可选）
-# ────────────────────────────────────────────────────────────
-#
-# 开启后，Claude Code 请求权限时：
-#   1. 推送通知到手机（带审批链接）
-#   2. 你在手机上点击链接打开审批页面
-#   3. 选择「允许本次 / 始终允许 / 拒绝」
-#   4. 脚本自动获取结果并返回给 Claude Code
-#
-# 前提条件：
-#   1. 部署 Flask 审批服务（参考 docs/remote-approve.md）
-#   2. 配置 Nginx 反向代理到你的域名（或直接用公网 IP + 端口）
-#   3. 手机能访问到该地址
-#
-# 如果不需要远程审批，保持 USE_REMOTE_APPROVE=0 即可
-# 通知功能不受影响，仍然正常推送到飞书/微信/企业微信
-#
-#
-# USE_REMOTE_APPROVE=1
-#
-# APPROVE_SERVER 填写你手机最终能访问到的完整地址
-# ⚠️ 不是 localhost，不是 127.0.0.1
-# 而是经过 Nginx 反代 / 内网穿透后的公网可达地址
-#
-# 示例（根据你的实际部署方式选择）：
-#
-#   独立子域名（推荐）：
-#   APPROVE_SERVER="https://approve.example.com"
-#
-#   子路径挂载（已有域名，加一个路径）：
-#   APPROVE_SERVER="https://yourdomain.com/claude-approve"
-#
-#   公网 IP 直接访问（不推荐，无 HTTPS）：
-#   APPROVE_SERVER="http://your-public-ip:9120"
-#
-#   内网直接访问（仅同局域网可用）：
-#   APPROVE_SERVER="http://192.168.1.100:9120"
-#
-# APPROVE_SERVER="https://approve.yourdomain.com"
-#
-# APPROVE_TIMEOUT=300     # 等待审批超时（秒），超时自动拒绝，默认 5 分钟
-# APPROVE_INTERVAL=3      # 轮询间隔（秒），默认 3 秒
-#
-#
-# Flask 审批服务本地监听配置
-# 仅在审批服务运行的机器上生效，不影响上面的 APPROVE_SERVER 地址
-# 默认监听 127.0.0.1:9120，通过 Nginx 反代对外暴露
-# 也可以通过环境变量覆盖：APPROVE_HOST=0.0.0.0 APPROVE_PORT=9120 python3 app.py
-#
-# APPROVE_LISTEN_HOST="127.0.0.1"
-# APPROVE_LISTEN_PORT="9120"
-
-
-# ────────────────────────────────────────────────────────────
-# 日志路径
-# ────────────────────────────────────────────────────────────
-LOG_FILE="$HOME/.claude/notifier.log"
-
-
-# ============================================================
-# 我的配置（将你选择的场景粘贴到这里，取消注释并填入真实值）
-# ============================================================
-
-# ── 通知渠道（至少启用一个）──
-
-USE_FEISHU=0
-FEISHU_MODE=""
-FEISHU_WEBHOOK=""
-FEISHU_APP_ID=""
-FEISHU_APP_SECRET=""
-FEISHU_RECEIVE_TYPE=""
-FEISHU_RECEIVE_ID=""
-
+# ── Server酱（个人微信）──
 USE_SERVERCHAN=0
-SERVERCHAN_KEY=""
+SERVERCHAN_KEY="YOUR_SERVERCHAN_KEY"
 
+# ── 企业微信机器人 ──
 USE_WXWORK=0
-WXWORK_WEBHOOK=""
+WXWORK_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
 
-# ── 远程审批（可选）──
+# ── 远程审批服务 ──
+USE_REMOTE_APPROVE=1
+APPROVE_SERVER="https://your-domain.com"   # 审批服务公网地址
+APPROVE_TIMEOUT=300                        # 轮询超时（秒）
+APPROVE_INTERVAL=3                         # 轮询间隔（秒）
 
-USE_REMOTE_APPROVE=0
-APPROVE_SERVER=""
-APPROVE_TIMEOUT=300
-APPROVE_INTERVAL=3
+# ── 日志 ──
+LOG_FILE="$HOME/.claude/notifier.log"

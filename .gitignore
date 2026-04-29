@@ -1,12 +1,12 @@
-# 用户配置文件（含密钥）
+# User config (contains API keys)
 notifier.conf
 *.conf
 !*.conf.example
 
-# 日志
+# Logs
 *.log
 
-# Token 缓存
+# Feishu token cache
 .feishu_token_cache
 
 # Python
@@ -18,6 +18,6 @@ build/
 venv/
 .env
 
-# 系统文件
+# System files
 .DS_Store
 Thumbs.db

@@ -116,18 +116,26 @@
       justify-content: center;
       gap: 8px;
     }
+    .btn-group.align-left .btn {
+      justify-content: flex-start;
+      text-align: left;
+    }
     .btn:active { transform: scale(0.97); }
 
-    .btn-approve {
+    .btn-approve, .btn-opt-1 {
       background: #27ae60;
       color: white;
     }
-    .btn-always {
+    .btn-always, .btn-opt-2 {
       background: #2980b9;
       color: white;
     }
-    .btn-reject {
+    .btn-reject, .btn-opt-3 {
       background: #e74c3c;
+      color: white;
+    }
+    .btn-opt-4 {
+      background: #6c757d;
       color: white;
     }
     .btn-disabled {
@@ -142,13 +150,26 @@
       opacity: 0.8;
     }
 
-    /* 状态 */
+    /* 状态行：标签在上，色块在下 */
+    .status-row {
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+    .status-row .info-label {
+      color: #888;
+      display: block;
+      margin-bottom: 8px;
+    }
     .status-badge {
       display: inline-block;
-      padding: 4px 12px;
-      border-radius: 20px;
+      padding: 6px 12px;
+      border-radius: 8px;
       font-size: 13px;
       font-weight: 500;
+      line-height: 1.4;
+      max-width: 100%;
+      word-break: break-word;
     }
     .status-pending { background: #fff3cd; color: #856404; }
     .status-approved { background: #d4edda; color: #155724; }
@@ -203,6 +224,72 @@
     }
     .pending-item:hover { background: #f8f8f8; }
     .pending-meta { font-size: 12px; color: #888; margin-top: 4px; }
+
+    /* Question option cards */
+    .question-text {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .multi-hint {
+      font-size: 12px;
+      color: #2980b9;
+      margin-bottom: 12px;
+    }
+    .option-list { display: flex; flex-direction: column; gap: 8px; }
+    .option-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px;
+      background: #f8f9fa;
+      border: 2px solid #e9ecef;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .option-card:active { transform: scale(0.98); }
+    .option-card:hover { border-color: #2980b9; background: #f0f7ff; }
+    .option-card.selected { border-color: #2980b9; background: #e8f4fd; }
+    .option-num {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #dee2e6;
+      color: #495057;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .option-card.selected .option-num { background: #2980b9; color: #fff; }
+    .option-body { flex: 1; min-width: 0; }
+    .option-label { font-size: 14px; font-weight: 600; }
+    .option-desc { font-size: 12px; color: #888; margin-top: 3px; }
+    .option-check {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #dee2e6;
+      border-radius: 4px;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .option-card.selected .option-check { background: #2980b9; border-color: #2980b9; }
+    .option-card.selected .option-check::after {
+      content: '✓';
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .btn-tui { background: #6c757d; color: white; }
+    .btn-confirm-select { background: #2980b9; color: white; }
   </style>
 </head>
 <body>
@@ -241,7 +328,9 @@
               {% endif %}
             </div>
           </div>
-          <span class="status-badge status-pending">待审批</span>
+          <span class="status-badge status-pending">
+            {% if item.request_type == 'question' %}待回答{% else %}待审批{% endif %}
+          </span>
         </a>
       {% endfor %}
     {% else %}
@@ -267,6 +356,131 @@
       {% endfor %}
     {% endif %}
   </div>
+
+{% elif data and data.request_type == 'question' %}
+  {# ===== Question view ===== #}
+  {% set q = data.questions[0] if data.questions else {} %}
+  <div class="card">
+    <div class="header">
+      <h1>❓ Claude 有一个问题</h1>
+      <p class="subtitle">{{ data.project }} · 🖥️ {{ data.hostname }}</p>
+    </div>
+
+    {% if q %}
+      {% if q.header %}
+        <span class="tool-badge tool-other" style="margin-bottom: 10px;">{{ q.header }}</span>
+      {% endif %}
+      <div class="question-text">{{ q.question }}</div>
+
+      {% if q.multiSelect %}
+        <div class="multi-hint">可多选，勾选后点击「确认选择」</div>
+      {% endif %}
+
+      <div class="option-list" id="optionList">
+        {% for opt in q.options %}
+        <div class="option-card" data-idx="{{ loop.index0 }}"
+             onclick="{% if q.multiSelect %}toggleMulti(this){% else %}submitOption({{ loop.index0 }}){% endif %}">
+          <span class="option-num">{{ loop.index }}</span>
+          <div class="option-body">
+            <div class="option-label">{{ opt.label }}</div>
+            {% if opt.description %}
+              <div class="option-desc">{{ opt.description }}</div>
+            {% endif %}
+          </div>
+          {% if q.multiSelect %}
+            <span class="option-check"></span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+
+      {% if q.multiSelect %}
+      <div class="btn-group" id="btnGroup">
+        <button class="btn btn-confirm-select" onclick="submitMulti()">
+          ✅ 确认选择
+        </button>
+        <button class="btn btn-tui" onclick="submitAnswer('tui')">
+          📱 到终端操作
+        </button>
+        <button class="btn btn-reject" onclick="submitAnswer('reject')">
+          ❌ 拒绝
+        </button>
+      </div>
+      {% else %}
+      <div class="btn-group" id="btnGroup" style="margin-top: 16px;">
+        <button class="btn btn-tui" onclick="submitAnswer('tui')">
+          📱 到终端操作
+          <span class="btn-hint">（仅批准权限，回终端选择）</span>
+        </button>
+        <button class="btn btn-reject" onclick="submitAnswer('reject')">
+          ❌ 拒绝
+        </button>
+      </div>
+      {% endif %}
+    {% else %}
+      <p style="color: #888;">问题数据缺失</p>
+    {% endif %}
+
+    <!-- 状态 -->
+    <div class="status-row" style="margin-top: 16px;">
+      <span class="info-label">当前状态</span>
+      <span class="status-badge status-{{ data.status }}">
+        {% if data.status == 'pending' %}⏳ 等待回答
+        {% elif data.status == 'approved' %}
+          {% if data.decision == 'option' %}✅ 已选择
+          {% elif data.decision == 'tui' %}📱 到终端操作
+          {% else %}✅ 已处理{% endif %}
+        {% else %}❌ 已拒绝{% endif %}
+      </span>
+    </div>
+
+    <div class="result-message" id="resultMsg"></div>
+  </div>
+
+  <script>
+    function toggleMulti(card) {
+      card.classList.toggle('selected');
+    }
+
+    async function submitOption(idx) {
+      await submitAnswer('select', { option_index: idx });
+    }
+
+    async function submitMulti() {
+      const selected = [...document.querySelectorAll('.option-card.selected')]
+        .map(c => parseInt(c.dataset.idx));
+      if (selected.length === 0) return;
+      await submitAnswer('select', { option_indices: selected });
+    }
+
+    async function submitAnswer(action, extra) {
+      const btnGroup = document.getElementById('btnGroup');
+      const optList = document.getElementById('optionList');
+      const resultMsg = document.getElementById('resultMsg');
+
+      if (btnGroup) btnGroup.querySelectorAll('.btn').forEach(b => { b.classList.add('btn-disabled'); b.disabled = true; });
+      if (optList) optList.querySelectorAll('.option-card').forEach(c => { c.style.pointerEvents = 'none'; c.style.opacity = '0.6'; });
+
+      try {
+        const body = { action, ...extra };
+        const res = await fetch('/api/answer/{{ request_id }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        if (btnGroup) btnGroup.style.display = 'none';
+        resultMsg.style.display = 'block';
+        resultMsg.textContent = data.message;
+      } catch (e) {
+        resultMsg.style.display = 'block';
+        resultMsg.textContent = '⚠️ 提交失败，请重试';
+        if (btnGroup) btnGroup.querySelectorAll('.btn').forEach(b => { b.classList.remove('btn-disabled'); b.disabled = false; });
+        if (optList) optList.querySelectorAll('.option-card').forEach(c => { c.style.pointerEvents = ''; c.style.opacity = ''; });
+      }
+    }
+  </script>
 
 {% elif data %}
   <div class="card">
@@ -363,32 +577,49 @@
     {% endif %}
 
     <!-- 状态 -->
-    <div class="info-row">
+    <div class="status-row">
       <span class="info-label">当前状态</span>
       <span class="status-badge status-{{ data.status }}">
         {% if data.status == 'pending' %}⏳ 待审批
-        {% elif data.status == 'approved' %}
-          {% if data.decision == 'always' %}✅ 已允许（始终）
-          {% else %}✅ 已允许（本次）{% endif %}
-        {% else %}❌ 已拒绝{% endif %}
+        {% elif data.status != 'pending' %}
+          {% set status_icon = '✅' if data.status == 'approved' else '❌' %}
+          {% set matched = [] %}
+          {% if data.inject_key and data.tui_options %}
+            {% for opt in data.tui_options %}
+              {% if opt.num|string == data.inject_key|string %}
+                {% if matched.append(opt.text) %}{% endif %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          {% if matched %}
+            {{ status_icon }} {{ matched[0] }}
+          {% elif data.decision == 'always' %}✅ 已允许（始终）
+          {% elif data.decision == 'reject' %}❌ 已拒绝
+          {% else %}✅ 已允许（本次）
+          {% endif %}
+        {% endif %}
       </span>
     </div>
 
     <!-- 按钮组 -->
     {% if data.status == 'pending' %}
     <div class="btn-group" id="btnGroup">
-      <button class="btn btn-approve" onclick="submitAction('approve')">
-        ✅ 允许本次
-        <span class="btn-hint">（仅允许这一次操作）</span>
-      </button>
-      <button class="btn btn-always" onclick="submitAction('always')">
-        ✅ 始终允许
-        <span class="btn-hint">（以后同类操作自动允许）</span>
-      </button>
-      <button class="btn btn-reject" onclick="submitAction('reject')">
-        ❌ 拒绝
-        <span class="btn-hint">（阻止此操作）</span>
-      </button>
+      {% if data.tui_options %}
+        {% for opt in data.tui_options %}
+          {% set action = opt.action if opt.action else 'approve' %}
+          {% set btn_class = {'approve': 'btn-approve', 'always': 'btn-always', 'reject': 'btn-reject'}.get(action, 'btn-opt-' ~ opt.num) %}
+          <button class="btn {{ btn_class }}" onclick="submitAction('{{ action }}', '{{ opt.num }}')">
+            {{ opt.num }}. {{ opt.text }}
+          </button>
+        {% endfor %}
+      {% else %}
+        <button class="btn btn-approve" onclick="submitAction('approve', '1')">
+          1. Yes
+        </button>
+        <button class="btn btn-reject" onclick="submitAction('reject', '2')">
+          2. No
+        </button>
+      {% endif %}
     </div>
     {% endif %}
 
@@ -429,8 +660,22 @@
       return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
+    // 按钮对齐：文字长度差异 > 6 时左对齐
+    (function() {
+      const btnGroup = document.getElementById('btnGroup');
+      if (!btnGroup) return;
+      const btns = btnGroup.querySelectorAll('.btn');
+      if (btns.length < 2) return;
+      const lens = [...btns].map(b => b.textContent.trim().length);
+      if (Math.max(...lens) - Math.min(...lens) > 6) {
+        btnGroup.classList.add('align-left');
+      }
+    })();
+
     // 提交审批
-    async function submitAction(action) {
+    async function submitAction(action, injectKey) {
+      const clickedBtn = event.currentTarget;
+      const btnText = clickedBtn.textContent.trim();
       const btnGroup = document.getElementById('btnGroup');
       const resultMsg = document.getElementById('resultMsg');
 
@@ -440,16 +685,19 @@
       });
 
       try {
+        const body = { action };
+        if (injectKey) body.inject_key = injectKey;
         const res = await fetch('/api/approve/{{ request_id }}', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify(body),
         });
         const data = await res.json();
 
+        const icon = action === 'reject' ? '❌' : '✅';
         btnGroup.style.display = 'none';
         resultMsg.style.display = 'block';
-        resultMsg.textContent = data.message;
+        resultMsg.textContent = icon + ' ' + btnText;
       } catch (e) {
         resultMsg.style.display = 'block';
         resultMsg.textContent = '⚠️ 提交失败，请重试';
