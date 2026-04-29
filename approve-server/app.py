@@ -14,7 +14,7 @@ app.json.ensure_ascii = False
 approve_store = {}
 store_lock = threading.Lock()
 
-EXPIRE_SECONDS = int(os.environ.get("APPROVE_EXPIRE", 1800))
+EXPIRE_SECONDS = int(os.environ.get("APPROVE_EXPIRE", 300))
 
 
 def cleanup_expired():
@@ -64,8 +64,10 @@ def create_request():
             "questions": data.get("questions", []),
             "option_index": None,
             "option_indices": None,
+            "answers": None,
             "tui_options": data.get("tui_options", []),
             "inject_key": None,
+            "inject_keys": None,
         }
 
     return jsonify({
@@ -92,6 +94,10 @@ def get_status(request_id):
             resp["option_index"] = data["option_index"]
         if data.get("option_indices") is not None:
             resp["option_indices"] = data["option_indices"]
+        if data.get("answers") is not None:
+            resp["answers"] = data["answers"]
+        if data.get("inject_keys"):
+            resp["inject_keys"] = data["inject_keys"]
         if data.get("inject_key") is not None:
             resp["inject_key"] = data["inject_key"]
         return jsonify(resp)
@@ -160,6 +166,27 @@ def submit_answer(request_id):
             if "option_indices" in data:
                 approve_store[request_id]["option_indices"] = data["option_indices"]
             msg = "✅ 已选择选项"
+        elif action == "select_all":
+            answers = data.get("answers", {})
+            questions = approve_store[request_id].get("questions", [])
+            if len(answers) != len(questions):
+                return jsonify({"error": f"需要 {len(questions)} 个回答，收到 {len(answers)} 个"}), 400
+            approve_store[request_id]["status"] = "approved"
+            approve_store[request_id]["decision"] = "option_all"
+            approve_store[request_id]["resolved_at"] = time.time()
+            approve_store[request_id]["answers"] = answers
+            inject_seq = []
+            for i in range(len(questions)):
+                ans = answers.get(str(i), answers.get(i, {}))
+                if isinstance(ans, dict) and ans.get("type") == "single":
+                    inject_seq.append(str(ans["index"] + 1))
+                elif isinstance(ans, dict) and ans.get("type") == "multi":
+                    for idx in sorted(ans["indices"]):
+                        inject_seq.append(str(idx + 1))
+                    inject_seq.append("Enter")
+            inject_seq.append("Enter")
+            approve_store[request_id]["inject_keys"] = inject_seq
+            msg = f"✅ 已回答全部 {len(questions)} 个问题"
         elif action == "tui":
             approve_store[request_id]["status"] = "approved"
             approve_store[request_id]["decision"] = "tui"
@@ -171,7 +198,7 @@ def submit_answer(request_id):
             approve_store[request_id]["resolved_at"] = time.time()
             msg = "❌ 已拒绝"
         else:
-            return jsonify({"error": "action must be select / tui / reject"}), 400
+            return jsonify({"error": "action must be select / select_all / tui / reject"}), 400
 
     return jsonify({
         "status": approve_store[request_id]["status"],
@@ -232,8 +259,10 @@ if __name__ == "__main__":
     print(f"🚀 Claude Code Approval Server")
     print(f"   Listening on {host}:{port}")
     print(f"   Dashboard: http://{host}:{port}/")
+    print(f"   Expire: {EXPIRE_SECONDS}s")
     print(f"")
-    print(f"   ⚠️  请通过 Nginx 反向代理对外暴露")
+    print(f"   ⚠️  请通过 Nginx + Auth 反向代理对外暴露")
+    print(f"   审批 API 无内置认证，值越短越安全")
     print(f"   配置 APPROVE_SERVER 为你的公网域名")
 
     app.run(host=host, port=port, debug=debug)

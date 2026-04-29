@@ -100,21 +100,38 @@ try:
     if not qs:
         print('')
         sys.exit()
-    q = qs[0]
     lines = []
-    lines.append('❓ 问题: ' + q.get('question', ''))
-    multi = q.get('multiSelect', False)
-    if multi:
-        lines.append('（可多选）')
-    opts = q.get('options', [])
-    if opts:
-        lines.append('选项:')
-        for i, o in enumerate(opts, 1):
-            desc = o.get('description', '')
-            if desc:
-                lines.append(f'  {i}. {o[\"label\"]} - {desc}')
-            else:
-                lines.append(f'  {i}. {o[\"label\"]}')
+    if len(qs) == 1:
+        q = qs[0]
+        lines.append('❓ 问题: ' + q.get('question', ''))
+        multi = q.get('multiSelect', False)
+        if multi:
+            lines.append('（可多选）')
+        opts = q.get('options', [])
+        if opts:
+            lines.append('选项:')
+            for i, o in enumerate(opts, 1):
+                desc = o.get('description', '')
+                if desc:
+                    lines.append(f'  {i}. {o[\"label\"]} - {desc}')
+                else:
+                    lines.append(f'  {i}. {o[\"label\"]}')
+    else:
+        lines.append(f'❓ 问题 ({len(qs)}个):')
+        for qi, q in enumerate(qs, 1):
+            header = q.get('header', '')
+            lines.append(f'--- Q{qi}: {header} ---' if header else f'--- Q{qi} ---')
+            lines.append(q.get('question', ''))
+            multi = q.get('multiSelect', False)
+            if multi:
+                lines.append('（可多选）')
+            opts = q.get('options', [])
+            for i, o in enumerate(opts, 1):
+                desc = o.get('description', '')
+                if desc:
+                    lines.append(f'  {i}. {o[\"label\"]} - {desc}')
+                else:
+                    lines.append(f'  {i}. {o[\"label\"]}')
     print('\n'.join(lines))
 except: print('')
 " 2>/dev/null)
@@ -320,7 +337,7 @@ os.close(fd)" "/dev/$target_tty" "$1" 2>/dev/null
     }
 
     ELAPSED=0
-    while [ $ELAPSED -lt ${APPROVE_TIMEOUT:-300} ]; do
+    while [ $ELAPSED -lt ${APPROVE_EXPIRE:-300} ]; do
       sleep ${APPROVE_INTERVAL:-3}
       ELAPSED=$((ELAPSED + ${APPROVE_INTERVAL:-3}))
 
@@ -344,17 +361,28 @@ import sys,json
 try: d=json.load(sys.stdin); print(d.get('request_type','permission'))
 except: print('permission')" 2>/dev/null)
 
-          INJECT_KEY=$(echo "$RESP" | python3 -c "
+          INJECT_KEYS=$(echo "$RESP" | python3 -c "
 import sys,json
-try: d=json.load(sys.stdin); print(d.get('inject_key',''))
+try:
+    d=json.load(sys.stdin)
+    keys=d.get('inject_keys',[])
+    if keys:
+        print(' '.join(keys))
+    else:
+        k=d.get('inject_key','')
+        print(k)
 except: print('')" 2>/dev/null)
 
-          if [ -n "$INJECT_KEY" ]; then
-            if inject_key "$INJECT_KEY"; then
-              log "remote-approve | [$inject_method] key='$INJECT_KEY' ($request_id)"
-            else
-              log "remote-approve | no injection, key='$INJECT_KEY' ($request_id)"
-            fi
+          if [ -n "$INJECT_KEYS" ]; then
+            for k in $INJECT_KEYS; do
+              if inject_key "$k"; then
+                log "remote-approve | [$inject_method] key='$k' ($request_id)"
+              else
+                log "remote-approve | no injection, key='$k' ($request_id)"
+                break
+              fi
+              sleep 0.3
+            done
           else
             log "remote-approve | no inject_key in response ($request_id)"
           fi
@@ -367,7 +395,7 @@ except: print('')" 2>/dev/null)
       esac
     done
 
-    log "remote-approve | timeout ${APPROVE_TIMEOUT:-300}s ($request_id)"
+    log "remote-approve | timeout ${APPROVE_EXPIRE:-300}s ($request_id)"
   ) </dev/null &>/dev/null &
   disown $! 2>/dev/null
 

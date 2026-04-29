@@ -1,232 +1,285 @@
-# Claude Code Notifier
+<p align="center">
+  <img src="images/logo.svg" width="120" height="120" alt="Claude Code Notifier Logo">
+</p>
 
-Push Claude Code events (permission requests, questions, task completion) to your phone in real time. Approve operations and answer questions directly from your phone — keystrokes are automatically injected into the terminal. No more sitting in front of the screen waiting for Claude to pop up a dialog.
+<h1 align="center">Claude Code Notifier</h1>
 
-[中文文档](README_CN.md)
+<p align="center">
+  Push Claude Code events to your phone in real time.<br>
+  Approve permissions, answer questions, track task completion — all from your phone.<br>
+  Keystrokes auto-injected into the terminal. No more waiting at the screen.
+</p>
+
+<p align="center">
+  <a href="README_CN.md">中文文档</a>
+</p>
+
+---
+
+## Screenshots
+
+> Feishu (Lark) as an example. ServerChan and WeChat Work are also supported.
+
+### Notification Cards
+
+Task completion and permission requests arrive as rich cards in your chat.
+
+<p align="center">
+  <img src="images/1_notification.png" width="320">
+</p>
+
+### Permission Request → Remote Approval
+
+Tap the card to open the approval page. See the operation type, risk level, file path, and full input details. Choose **Yes** / **Yes, always** / **No** — keystroke is injected into the terminal automatically.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="images/2_request.jpg" width="280"><br>
+      <sub>Approval page with operation details</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="images/3_approved.png" width="280"><br>
+      <sub>After tapping "Yes, always"</sub>
+    </td>
+  </tr>
+</table>
+
+### Single Question
+
+When Claude asks a question (`AskUserQuestion`), your phone shows the full question and options. Select an answer or go back to the terminal.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="images/4_single_question.png" width="280"><br>
+      <sub>Question notification in chat</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="images/5_single_question.png" width="280"><br>
+      <sub>Approval page with options</sub>
+    </td>
+  </tr>
+</table>
+
+### Multi-Question with Tabs
+
+Multiple questions are displayed as tabs. Answer each one, then submit all at once.
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="images/6_multi_question.png" width="220"><br>
+      <sub>Notification listing all questions</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="images/7_multi_question.jpg" width="220"><br>
+      <sub>Tab view — answering Q1</sub>
+    </td>
+    <td align="center" width="34%">
+      <img src="images/8_multi_question.png" width="220"><br>
+      <sub>All answered — ready to submit</sub>
+    </td>
+  </tr>
+</table>
+
+### Task Completion
+
+When Claude finishes, you get a rich notification with the project name, working directory, and a full task summary — instantly distinguish which session completed and what it did.
+
+<p align="center">
+  <img src="images/9_task_complete.jpg" width="320">
+</p>
+
+---
 
 ## Features
 
-### Permission Approval Push
-When Claude Code needs authorization (shell commands, file writes/edits, etc.), you get a notification card on your phone showing the operation type, risk level, command or file path. Tap an approval button (Allow / Always Allow / Reject), and the result is automatically injected into the terminal so Claude continues execution.
+**Permission Approval** — Phone notification with operation type, risk level, and command/file details. Tap Allow / Always Allow / Reject, result injected into terminal.
 
-### Question Selection Push
-When Claude asks a question (`AskUserQuestion`), your phone displays the full question and option cards with single/multi-select support. Your selection is sent back to the terminal automatically — no need to switch back to your computer.
+**Question Selection** — Full question and options on phone. Supports single-select, multi-select, and multi-question tabs. Selection auto-sent back to terminal.
 
-### Task Completion Notification
-When Claude finishes (`Stop` Hook), you receive a rich notification with:
-- **Project name**: extracted from the `cwd` basename, e.g. "claude-code-notifier task complete"
-- **Working directory**: full `cwd` path (home abbreviated to `~`)
-- **Task summary**: `last_assistant_message` content (code blocks and markdown stripped, truncated to 500 chars)
+**Task Completion** — Rich notification with project name (from `cwd`), working directory, and task summary from `last_assistant_message` (markdown stripped, max 500 chars).
 
-When running multiple Claude sessions in parallel, you can instantly tell which one finished and what it did.
+**TUI Option Sync** — Approval buttons match the terminal TUI (2 or 3 buttons). "Always" description parsed from `permission_suggestions`.
 
-### TUI Option Sync
-The approval page dynamically renders buttons matching the terminal TUI (2 or 3 options). The "Always" option description is parsed from `permission_suggestions` (e.g. "Always allow access to /path/to/dir").
+**Keystroke Injection** — Three methods, auto-detected:
+1. **tmux send-keys** (recommended)
+2. **TIOCSTI ioctl** (fallback)
+3. **Notification-only** (if neither available)
 
-### Multi-Channel Push
-Enable one or more notification channels simultaneously:
-- **Feishu (Lark)**: Webhook mode (group bot) or App mode (personal messages), with interactive cards and approval buttons
-- **ServerChan**: Push to personal WeChat
-- **WeChat Work**: Group bot Webhook
+**Multi-Channel** — Enable one or more simultaneously:
+- **Feishu** — Webhook (group bot) or App (personal), with interactive cards
+- **ServerChan** — Push to WeChat
+- **WeChat Work** — Group bot Webhook
 
-### Remote Approval Server
-Built-in Flask approval server providing:
-- Mobile-first web approval page
-- Dashboard for all pending and historical requests
-- RESTful API for custom notification channel integration
-- Auto-expiring requests (default 30 minutes)
+**Approval Server** — Flask server with mobile-first page, dashboard, RESTful API, auto-expiring requests.
 
-### Keystroke Auto-Injection
-After approval, keystrokes are injected into the terminal running Claude Code:
-1. **tmux send-keys** (recommended): just run Claude Code inside a tmux session
-2. **TIOCSTI ioctl**: fallback for non-tmux environments (disabled on some kernels)
-3. **Notification-only mode**: if neither method is available, sends a notification reminding you to go back to the terminal
+---
 
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│      Claude Code TUI shows permission prompt / question      │
-└─────────────────────────────────────────────────────────────┘
-                            │
-              Hook triggers notify.sh (reads stdin JSON)
-                            │
-                ┌───────────┴───────────┐
-                │                       │
-       Multi-channel push         approve-server creates request
-    (Feishu/ServerChan/WxWork)      POST /api/request
-                │                       │
-                ▼                       ▼
-       Phone notification ──────→ Open approval page (mobile Web UI)
-                                        │
-                              Choose Allow / Always Allow / Reject
-                              or select question options
-                                        │
-                                POST /api/approve or /api/answer
-                                        │
-                         notify.sh background polls /api/status
-                                        │
-                              Detects result + inject_key
-                                        │
-                           tmux send-keys injects keystroke
-                                        │
-                              Claude Code continues
+Claude Code TUI (permission / question)
+        │
+  Hook → notify.sh (reads stdin JSON)
+        │
+   ┌────┴────┐
+   ▼         ▼
+ Push      approve-server
+ notification   POST /api/request
+   │              │
+   ▼              ▼
+ Phone ──→ Approval page (mobile Web UI)
+              │
+         Tap Allow / Reject / Select
+              │
+         POST /api/approve or /api/answer
+              │
+         notify.sh polls /api/status
+              │
+         tmux send-keys → terminal
+              │
+         Claude Code continues
 ```
+
+---
 
 ## Project Structure
 
 ```
 claude-code-notifier/
-├── notify.sh                        # Main script: Hook entry, context parsing, push, approval polling, key injection
-├── notifier.conf.example            # Configuration template
-├── README.md                        # English documentation
-├── README_CN.md                     # Chinese documentation
-└── approve-server/                  # Flask remote approval server
-    ├── app.py                       # Backend API: create/query/approve/answer
-    ├── templates/
-    │   └── approve.html             # Mobile approval page (permission + question + dashboard)
-    ├── requirements.txt             # Python dependencies (flask>=3.0, gunicorn>=21.2)
-    └── claude-approve.service       # systemd service template
+├── notify.sh                     # Hook entry, parsing, push, polling, key injection
+├── notifier.conf.example         # Config template
+├── README.md / README_CN.md      # Docs
+├── images/                       # Logo and screenshots
+└── approve-server/
+    ├── app.py                    # Backend API
+    ├── templates/approve.html    # Mobile approval page
+    ├── requirements.txt          # Python deps
+    └── claude-approve.service    # systemd template
 ```
+
+---
 
 ## Installation
 
-### Option 1: Using a zip migration package (recommended)
-
-If you received a `claude-code-notifier-YYYYMMDD-HHMMSS.zip` package:
+### Clone from GitHub
 
 ```bash
-# 1. Extract
-unzip claude-code-notifier-*.zip -d /tmp/claude-code-notifier
-
-# 2. Deploy to ~/.claude/
-cp /tmp/claude-code-notifier/notify.sh ~/.claude/notify.sh
-chmod +x ~/.claude/notify.sh
-cp /tmp/claude-code-notifier/notifier.conf.example ~/.claude/notifier.conf
-
-# 3. Deploy approval server
-cp -r /tmp/claude-code-notifier/approve-server ~/.claude/approve-server
-cd ~/.claude/approve-server
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# 4. Edit config
-vim ~/.claude/notifier.conf
-
-# 5. Configure Claude Code Hooks (see below)
-```
-
-### Option 2: Manual deployment
-
-```bash
-# 1. Clone the repo
 git clone https://github.com/lokyshin/claude-code-notifier.git
 cd claude-code-notifier
 
-# 2. Deploy main script
-cp notify.sh ~/.claude/notify.sh
-chmod +x ~/.claude/notify.sh
-
-# 3. Create config file
+cp notify.sh ~/.claude/notify.sh && chmod +x ~/.claude/notify.sh
 cp notifier.conf.example ~/.claude/notifier.conf
-# Edit and fill in your notification channel credentials
-vim ~/.claude/notifier.conf
 
-# 4. Deploy approval server
 cp -r approve-server ~/.claude/approve-server
 cd ~/.claude/approve-server
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 ```
 
-### Configure Notification Channels
+### From zip package
 
-Edit `~/.claude/notifier.conf`, enable at least one channel:
+```bash
+unzip claude-code-notifier-*.zip -d /tmp/ccn
+cp /tmp/ccn/notify.sh ~/.claude/notify.sh && chmod +x ~/.claude/notify.sh
+cp /tmp/ccn/notifier.conf.example ~/.claude/notifier.conf
+cp -r /tmp/ccn/approve-server ~/.claude/approve-server
+cd ~/.claude/approve-server
+python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+```
 
-#### Feishu - App Mode (recommended, supports personal messages)
+Then edit `~/.claude/notifier.conf` with your channel credentials.
 
+---
+
+## Configuration
+
+### Notification Channels
+
+Edit `~/.claude/notifier.conf`, enable at least one:
+
+**Feishu App** (recommended):
 ```bash
 USE_FEISHU=1
 FEISHU_MODE="app"
 FEISHU_APP_ID="cli_xxxxxxxxxxxxxxxx"
 FEISHU_APP_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-FEISHU_RECEIVE_TYPE="open_id"           # open_id / chat_id / user_id
+FEISHU_RECEIVE_TYPE="open_id"
 FEISHU_RECEIVE_ID="ou_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ```
 
-> Requires creating an app on the Feishu Open Platform with `im:message:send_as_bot` permission.
-
-#### Feishu - Webhook Mode (group bot, simpler setup)
-
+**Feishu Webhook**:
 ```bash
 USE_FEISHU=1
 FEISHU_MODE="webhook"
-FEISHU_WEBHOOK="https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+FEISHU_WEBHOOK="https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx-xxxx"
 ```
 
-#### ServerChan (push to personal WeChat)
+**ServerChan** (WeChat): `USE_SERVERCHAN=1` + `SERVERCHAN_KEY="SCTxxx..."`
+
+**WeChat Work**: `USE_WXWORK=1` + `WXWORK_WEBHOOK="https://qyapi.weixin.qq.com/..."`
+
+### Remote Approval
 
 ```bash
-USE_SERVERCHAN=1
-SERVERCHAN_KEY="SCTxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-```
-
-> Get your key at [sct.ftqq.com](https://sct.ftqq.com).
-
-#### WeChat Work Group Bot
-
-```bash
-USE_WXWORK=1
-WXWORK_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-```
-
-### Configure Remote Approval
-
-```bash
-# Enable in notifier.conf
 USE_REMOTE_APPROVE=1
-APPROVE_SERVER="https://your-domain.com"   # Publicly accessible URL
-APPROVE_TIMEOUT=300                        # Polling timeout in seconds (default 300)
-APPROVE_INTERVAL=3                         # Polling interval in seconds (default 3)
+APPROVE_SERVER="https://your-domain.com"
+APPROVE_INTERVAL=3
+APPROVE_EXPIRE=300
 ```
 
-### Start the Approval Server
+> **Security**: The approval API has no built-in auth. Keep `APPROVE_EXPIRE` short (120-300s). For internet-facing servers, add Nginx Basic Auth or mTLS.
 
-#### Method 1: systemd (recommended, auto-start on boot)
+### Claude Code Hooks
 
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "~/.claude/notify.sh permission", "timeout": 10 }]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "~/.claude/notify.sh done", "timeout": 10 }]
+      }
+    ]
+  }
+}
+```
+
+> `PermissionRequest` handles both permission requests and `AskUserQuestion` events.
+
+---
+
+## Starting the Approval Server
+
+**systemd** (recommended):
 ```bash
-# Edit service file, replace YOUR_USERNAME
 sed -i "s/YOUR_USERNAME/$(whoami)/g" ~/.claude/approve-server/claude-approve.service
-
-# Install and start
 sudo cp ~/.claude/approve-server/claude-approve.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now claude-approve
-
-# Check status
-sudo systemctl status claude-approve
+sudo systemctl daemon-reload && sudo systemctl enable --now claude-approve
 ```
 
-#### Method 2: Manual start
-
+**Manual**:
 ```bash
-cd ~/.claude/approve-server
-source venv/bin/activate
+cd ~/.claude/approve-server && source venv/bin/activate
 gunicorn -w 1 --threads 2 -b 0.0.0.0:9120 app:app
 ```
 
-#### Nginx Reverse Proxy (recommended with HTTPS)
-
+**Nginx** (HTTPS):
 ```nginx
 server {
     listen 443 ssl;
     server_name your-domain.com;
-
-    ssl_certificate     /path/to/cert.pem;
+    ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
-
     location / {
         proxy_pass http://127.0.0.1:9120;
         proxy_set_header Host $host;
@@ -237,150 +290,66 @@ server {
 }
 ```
 
-### Configure Claude Code Hooks
+---
 
-Add to `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "PermissionRequest": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/notify.sh permission",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/notify.sh done",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-> **Note**: The `PermissionRequest` Hook handles both permission requests and `AskUserQuestion` events. The `Stop` Hook triggers task completion notifications.
-
-## Approval Server API
+## API Reference
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | Dashboard showing pending and recent requests |
-| `/approve/<id>` | GET | Single request approval page (mobile-optimized) |
-| `/api/request` | POST | Create approval request (called by notify.sh) |
-| `/api/status/<id>` | GET | Query request status (polled by notify.sh) |
-| `/api/approve/<id>` | POST | Submit permission approval: `approve` / `always` / `reject` |
-| `/api/answer/<id>` | POST | Submit question answer: `select` / `tui` / `reject` |
+| `/` | GET | Dashboard |
+| `/approve/<id>` | GET | Approval page (mobile) |
+| `/api/request` | POST | Create request (notify.sh) |
+| `/api/status/<id>` | GET | Query status (notify.sh polls) |
+| `/api/approve/<id>` | POST | Permission: `approve` / `always` / `reject` |
+| `/api/answer/<id>` | POST | Question answer |
 
-### Create Approval Request
+---
 
-```bash
-curl -X POST https://your-domain.com/api/request \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "request_id": "req-1234567890-12345",
-    "project": "my-project",
-    "hostname": "my-server",
-    "tool_name": "Bash",
-    "tool_input": {"command": "npm install"},
-    "risk_level": "low"
-  }'
-```
-
-### Submit Approval
-
-```bash
-curl -X POST https://your-domain.com/api/approve/req-1234567890-12345 \
-  -H 'Content-Type: application/json' \
-  -d '{"action": "approve", "inject_key": "1"}'
-```
-
-## Configuration Reference
-
-### notifier.conf Options
+## Config Reference
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `USE_FEISHU` | `0` | Enable Feishu notifications (0=off, 1=on) |
-| `FEISHU_MODE` | `webhook` | Feishu mode: `webhook` or `app` |
-| `FEISHU_WEBHOOK` | - | Webhook URL (webhook mode) |
-| `FEISHU_APP_ID` | - | App ID (app mode) |
-| `FEISHU_APP_SECRET` | - | App secret (app mode) |
-| `FEISHU_RECEIVE_TYPE` | `chat_id` | Receiver type: `open_id` / `chat_id` / `user_id` |
-| `FEISHU_RECEIVE_ID` | - | Receiver ID (app mode) |
+| `USE_FEISHU` | `0` | Enable Feishu |
+| `FEISHU_MODE` | `webhook` | `webhook` or `app` |
+| `FEISHU_WEBHOOK` | - | Webhook URL |
+| `FEISHU_APP_ID` / `APP_SECRET` | - | App credentials |
+| `FEISHU_RECEIVE_TYPE` | `chat_id` | `open_id` / `chat_id` / `user_id` |
+| `FEISHU_RECEIVE_ID` | - | Receiver ID |
 | `USE_SERVERCHAN` | `0` | Enable ServerChan |
-| `SERVERCHAN_KEY` | - | ServerChan API key |
+| `SERVERCHAN_KEY` | - | API key |
 | `USE_WXWORK` | `0` | Enable WeChat Work |
-| `WXWORK_WEBHOOK` | - | WeChat Work Webhook URL |
-| `USE_REMOTE_APPROVE` | `0` | Enable remote approval server |
-| `APPROVE_SERVER` | - | Approval server public URL |
-| `APPROVE_TIMEOUT` | `300` | Approval polling timeout (seconds) |
-| `APPROVE_INTERVAL` | `3` | Approval polling interval (seconds) |
-| `LOG_FILE` | `~/.claude/notifier.log` | Log file path |
+| `WXWORK_WEBHOOK` | - | Webhook URL |
+| `USE_REMOTE_APPROVE` | `0` | Enable approval server |
+| `APPROVE_SERVER` | - | Server URL |
+| `APPROVE_INTERVAL` | `3` | Poll interval (s) |
+| `APPROVE_EXPIRE` | `300` | Request expiry + poll timeout (s) |
+| `LOG_FILE` | `~/.claude/notifier.log` | Log path |
 
-### Environment Variables
+| Env Variable | Description |
+|-------------|-------------|
+| `CLAUDE_NOTIFIER_CONFIG` | Config path (default `~/.claude/notifier.conf`) |
+| `CLAUDE_PROJECT_DIR` | Project dir (set by Claude Code) |
+| `APPROVE_HOST` / `APPROVE_PORT` | Server bind (default `127.0.0.1:9120`) |
+| `APPROVE_EXPIRE` | Request expiry (default `300`) |
+| `APPROVE_DEBUG` | Flask debug mode |
 
-| Variable | Description |
-|----------|-------------|
-| `CLAUDE_NOTIFIER_CONFIG` | Custom config file path (default `~/.claude/notifier.conf`) |
-| `CLAUDE_PROJECT_DIR` | Current project directory (set automatically by Claude Code) |
-| `APPROVE_HOST` | Approval server listen address (default `127.0.0.1`) |
-| `APPROVE_PORT` | Approval server port (default `9120`) |
-| `APPROVE_EXPIRE` | Request expiry time in seconds (default `1800`) |
-| `APPROVE_DEBUG` | Flask debug mode (`true`/`false`) |
+---
 
-## Migration
+## Prerequisites
 
-### Using a zip package
+- Python 3.8+ / tmux (recommended) / Claude Code CLI / curl / Nginx (optional)
 
-1. Package on source machine: the project provides timestamped zip packages
-2. Transfer to target machine
-3. Extract and follow the installation steps above
-4. Edit `~/.claude/notifier.conf` with your notification channel config
-5. Add Hooks to `~/.claude/settings.json`
-6. If using remote approval, start approve-server and configure Nginx
-
-### Prerequisites on Target Machine
-
-- Python 3.8+
-- tmux (recommended, for keystroke injection)
-- Claude Code CLI
-- curl (for HTTP API calls in notify.sh)
-- Nginx (optional, for HTTPS reverse proxy)
-
-## Logs & Debugging
-
-Logs are written to `~/.claude/notifier.log` by default, recording every push and approval event:
+## Logs & Security
 
 ```bash
-# Watch live logs
-tail -f ~/.claude/notifier.log
-
-# Watch approval server logs
-sudo journalctl -u claude-approve -f
+tail -f ~/.claude/notifier.log          # notify.sh logs
+sudo journalctl -u claude-approve -f    # approval server logs
 ```
 
-Feishu App mode token cache is at `~/.claude/.feishu_token_cache`, auto-refreshed with a 110-minute TTL.
-
-## Security Notes
-
-- `notifier.conf` contains API keys — set permissions with `chmod 600 ~/.claude/notifier.conf`
-- Expose the approval server through Nginx + HTTPS, don't expose port 9120 directly
-- Approval requests are stored in memory and cleared on server restart
-- Token cache file permissions are automatically set to 600
+- `chmod 600 ~/.claude/notifier.conf` — contains API keys
+- Expose approval server via Nginx + HTTPS, not port 9120 directly
+- Requests stored in memory, cleared on restart
+- Token cache permissions auto-set to 600
 
 ## License
 

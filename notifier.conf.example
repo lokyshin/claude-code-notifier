@@ -25,8 +25,14 @@ WXWORK_WEBHOOK="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
 # ── 远程审批服务 ──
 USE_REMOTE_APPROVE=1
 APPROVE_SERVER="https://your-domain.com"   # 审批服务公网地址
-APPROVE_TIMEOUT=300                        # 轮询超时（秒）
 APPROVE_INTERVAL=3                         # 轮询间隔（秒）
+
+# ── 审批过期时间（秒）──
+# 同时控制：服务端请求存活时间 + 客户端轮询超时
+# ⚠️ 安全提示：审批 API 无内置认证，任何能访问服务的人都可以批准请求。
+#    值越短越安全。建议 120~300 秒，手机审批通常几十秒内完成。
+#    如需对外暴露，强烈建议通过 Nginx 加 Basic Auth 或 mTLS。
+APPROVE_EXPIRE=300                         # 默认 5 分钟（300秒）
 
 # ── 日志 ──
 LOG_FILE="$HOME/.claude/notifier.log"

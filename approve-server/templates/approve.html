@@ -290,6 +290,24 @@
     }
     .btn-tui { background: #6c757d; color: white; }
     .btn-confirm-select { background: #2980b9; color: white; }
+
+    /* Multi-question tab status dot */
+    .q-status {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-left: 4px;
+      vertical-align: middle;
+      background: #dee2e6;
+    }
+    .q-status.answered { background: #27ae60; }
+    .progress-text {
+      text-align: center;
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
@@ -359,14 +377,19 @@
 
 {% elif data and data.request_type == 'question' %}
   {# ===== Question view ===== #}
-  {% set q = data.questions[0] if data.questions else {} %}
+  {% set qcount = data.questions|length if data.questions else 0 %}
   <div class="card">
     <div class="header">
-      <h1>❓ Claude 有一个问题</h1>
+      <h1>❓ Claude 有{% if qcount > 1 %} {{ qcount }} 个{% endif %}问题</h1>
       <p class="subtitle">{{ data.project }} · 🖥️ {{ data.hostname }}</p>
     </div>
 
-    {% if q %}
+    {% if qcount == 0 %}
+      <p style="color: #888;">问题数据缺失</p>
+
+    {% elif qcount == 1 %}
+      {# ---- Single question: unchanged original layout ---- #}
+      {% set q = data.questions[0] %}
       {% if q.header %}
         <span class="tool-badge tool-other" style="margin-bottom: 10px;">{{ q.header }}</span>
       {% endif %}
@@ -417,8 +440,64 @@
         </button>
       </div>
       {% endif %}
+
     {% else %}
-      <p style="color: #888;">问题数据缺失</p>
+      {# ---- Multi-question: tab layout ---- #}
+      <div class="progress-text" id="progressText">已回答 0 / {{ qcount }}</div>
+
+      <div id="questionTabWrapper">
+        <div class="tab-bar">
+          {% for q in data.questions %}
+          <div class="tab-item {% if loop.first %}active{% endif %}"
+               id="q-tab-btn-{{ loop.index0 }}"
+               onclick="switchTab(this, 'q-tab-{{ loop.index0 }}')">
+            {{ q.header if q.header else ('Q' ~ loop.index) }}
+            <span class="q-status" id="q-status-{{ loop.index0 }}"></span>
+          </div>
+          {% endfor %}
+        </div>
+
+        {% for q in data.questions %}
+        {% set qi = loop.index0 %}
+        <div id="q-tab-{{ qi }}" class="tab-content {% if loop.first %}active{% endif %}">
+          <div class="question-text">{{ q.question }}</div>
+
+          {% if q.multiSelect %}
+            <div class="multi-hint">可多选，勾选后点击下方「确认所有回答」</div>
+          {% endif %}
+
+          <div class="option-list" id="optionList-{{ qi }}">
+            {% for opt in q.options %}
+            <div class="option-card" data-idx="{{ loop.index0 }}" data-qidx="{{ qi }}"
+                 onclick="{% if q.multiSelect %}toggleMultiQ({{ qi }}, this){% else %}selectOptionQ({{ qi }}, {{ loop.index0 }}){% endif %}">
+              <span class="option-num">{{ loop.index }}</span>
+              <div class="option-body">
+                <div class="option-label">{{ opt.label }}</div>
+                {% if opt.description %}
+                  <div class="option-desc">{{ opt.description }}</div>
+                {% endif %}
+              </div>
+              {% if q.multiSelect %}
+                <span class="option-check"></span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="btn-group" id="btnGroup" style="margin-top: 16px;">
+        <button class="btn btn-confirm-select btn-disabled" id="btnSubmitAll" disabled onclick="submitAllAnswers()">
+          ✅ 确认所有回答
+        </button>
+        <button class="btn btn-tui" onclick="submitAnswer('tui')">
+          📱 到终端操作
+        </button>
+        <button class="btn btn-reject" onclick="submitAnswer('reject')">
+          ❌ 拒绝
+        </button>
+      </div>
     {% endif %}
 
     <!-- 状态 -->
@@ -428,6 +507,7 @@
         {% if data.status == 'pending' %}⏳ 等待回答
         {% elif data.status == 'approved' %}
           {% if data.decision == 'option' %}✅ 已选择
+          {% elif data.decision == 'option_all' %}✅ 已回答全部问题
           {% elif data.decision == 'tui' %}📱 到终端操作
           {% else %}✅ 已处理{% endif %}
         {% else %}❌ 已拒绝{% endif %}
@@ -438,6 +518,8 @@
   </div>
 
   <script>
+  {% if qcount == 1 %}
+    {# ---- Single-question JS (unchanged) ---- #}
     function toggleMulti(card) {
       card.classList.toggle('selected');
     }
@@ -480,6 +562,131 @@
         if (optList) optList.querySelectorAll('.option-card').forEach(c => { c.style.pointerEvents = ''; c.style.opacity = ''; });
       }
     }
+
+  {% elif qcount > 1 %}
+    {# ---- Multi-question JS ---- #}
+    function switchTab(el, tabId) {
+      el.parentElement.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      el.parentElement.parentElement.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    const totalQuestions = {{ qcount }};
+    const answers = {};
+    const questionMeta = {{ data.questions|tojson }};
+
+    function selectOptionQ(qIdx, optIdx) {
+      const list = document.getElementById('optionList-' + qIdx);
+      list.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+      list.querySelectorAll('.option-card')[optIdx].classList.add('selected');
+      answers[qIdx] = { type: 'single', index: optIdx };
+      updateTabStatus(qIdx);
+      updateSubmitButton();
+      autoAdvanceTab(qIdx);
+    }
+
+    function toggleMultiQ(qIdx, card) {
+      card.classList.toggle('selected');
+      const selected = [...document.querySelectorAll('#optionList-' + qIdx + ' .option-card.selected')]
+        .map(c => parseInt(c.dataset.idx));
+      if (selected.length > 0) {
+        answers[qIdx] = { type: 'multi', indices: selected };
+      } else {
+        delete answers[qIdx];
+      }
+      updateTabStatus(qIdx);
+      updateSubmitButton();
+    }
+
+    function updateTabStatus(qIdx) {
+      const dot = document.getElementById('q-status-' + qIdx);
+      if (answers[qIdx]) {
+        dot.classList.add('answered');
+      } else {
+        dot.classList.remove('answered');
+      }
+      const answered = Object.keys(answers).length;
+      document.getElementById('progressText').textContent = '已回答 ' + answered + ' / ' + totalQuestions;
+    }
+
+    function updateSubmitButton() {
+      const btn = document.getElementById('btnSubmitAll');
+      const answered = Object.keys(answers).length;
+      if (answered >= totalQuestions) {
+        btn.disabled = false;
+        btn.classList.remove('btn-disabled');
+      } else {
+        btn.disabled = true;
+        btn.classList.add('btn-disabled');
+      }
+    }
+
+    function autoAdvanceTab(currentIdx) {
+      for (let i = 1; i <= totalQuestions; i++) {
+        const nextIdx = (currentIdx + i) % totalQuestions;
+        if (!answers[nextIdx]) {
+          const tabBtn = document.getElementById('q-tab-btn-' + nextIdx);
+          switchTab(tabBtn, 'q-tab-' + nextIdx);
+          return;
+        }
+      }
+    }
+
+    async function submitAllAnswers() {
+      const btnGroup = document.getElementById('btnGroup');
+      const resultMsg = document.getElementById('resultMsg');
+
+      btnGroup.querySelectorAll('.btn').forEach(b => { b.classList.add('btn-disabled'); b.disabled = true; });
+      document.querySelectorAll('.option-card').forEach(c => { c.style.pointerEvents = 'none'; c.style.opacity = '0.6'; });
+
+      try {
+        const body = { action: 'select_all', answers: answers };
+        const res = await fetch('/api/answer/{{ request_id }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        btnGroup.style.display = 'none';
+        resultMsg.style.display = 'block';
+        resultMsg.textContent = data.message || data.error;
+      } catch (e) {
+        resultMsg.style.display = 'block';
+        resultMsg.textContent = '⚠️ 提交失败，请重试';
+        btnGroup.querySelectorAll('.btn').forEach(b => { b.classList.remove('btn-disabled'); b.disabled = false; });
+        document.querySelectorAll('.option-card').forEach(c => { c.style.pointerEvents = ''; c.style.opacity = ''; });
+      }
+    }
+
+    async function submitAnswer(action, extra) {
+      const btnGroup = document.getElementById('btnGroup');
+      const resultMsg = document.getElementById('resultMsg');
+
+      btnGroup.querySelectorAll('.btn').forEach(b => { b.classList.add('btn-disabled'); b.disabled = true; });
+      document.querySelectorAll('.option-card').forEach(c => { c.style.pointerEvents = 'none'; c.style.opacity = '0.6'; });
+
+      try {
+        const body = { action, ...extra };
+        const res = await fetch('/api/answer/{{ request_id }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        btnGroup.style.display = 'none';
+        resultMsg.style.display = 'block';
+        resultMsg.textContent = data.message;
+      } catch (e) {
+        resultMsg.style.display = 'block';
+        resultMsg.textContent = '⚠️ 提交失败，请重试';
+        btnGroup.querySelectorAll('.btn').forEach(b => { b.classList.remove('btn-disabled'); b.disabled = false; });
+        document.querySelectorAll('.option-card').forEach(c => { c.style.pointerEvents = ''; c.style.opacity = ''; });
+      }
+    }
+  {% endif %}
   </script>
 
 {% elif data %}
