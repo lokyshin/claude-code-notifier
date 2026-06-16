@@ -289,18 +289,26 @@ poll_approve_and_inject() {
   request_id=$(basename "$approve_url")
   target_tty=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' ')
 
-  if [ -z "$target_tty" ] || [ "$target_tty" = "?" ]; then
-    log "remote-approve | no TTY found (tty=$target_tty), skip polling"
-    return
-  fi
-
   # 检测可用的输入注入方式（优先级：tmux > TIOCSTI > none）
   inject_method="none"
 
   if [ -n "$TMUX" ]; then
-    target_pane=$(tmux list-panes -a -F '#{pane_id} #{pane_tty}' 2>/dev/null \
-      | grep "/dev/$target_tty" | awk '{print $1}')
+    if [ -n "$target_tty" ] && [ "$target_tty" != "?" ]; then
+      target_pane=$(tmux list-panes -a -F '#{pane_id} #{pane_tty}' 2>/dev/null \
+        | grep "/dev/$target_tty" | awk '{print $1}')
+    fi
+    # Fallback: use TMUX_PANE or configured TARGET_PANE
+    if [ -z "$target_pane" ]; then
+      target_pane="${TARGET_PANE:-$TMUX_PANE}"
+    fi
     [ -n "$target_pane" ] && inject_method="tmux"
+  fi
+
+  if [ "$inject_method" = "none" ]; then
+    if [ -z "$target_tty" ] || [ "$target_tty" = "?" ]; then
+      log "remote-approve | no TTY and no tmux pane found, skip polling"
+      return
+    fi
   fi
 
   if [ "$inject_method" = "none" ] && [ -c "/dev/$target_tty" ]; then
