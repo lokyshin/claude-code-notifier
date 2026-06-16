@@ -34,5 +34,23 @@ APPROVE_INTERVAL=3                         # 轮询间隔（秒）
 #    如需对外暴露，强烈建议通过 Nginx 加 Basic Auth 或 mTLS。
 APPROVE_EXPIRE=300                         # 默认 5 分钟（300秒）
 
+# ── tmux（hook 子进程可能丢失 TMUX/TMUX_PANE，动态检测）──
+# 当 Claude Code hook 以子进程执行 notify.sh 时，$TMUX 和 $TMUX_PANE
+# 环境变量可能不会被继承，导致按键注入失败。以下代码自动检测并恢复。
+# 此配置可直接复制到任何新服务器，无需修改。
+if [ -z "$TMUX" ]; then
+  _tmux_sock=$(find /tmp/tmux-$(id -u)/ -type s 2>/dev/null | head -1)
+  if [ -n "$_tmux_sock" ]; then
+    _tmux_pid=$(tmux -S "$_tmux_sock" display-message -p '#{pid}' 2>/dev/null)
+    TMUX="${_tmux_sock},${_tmux_pid:-0},0"
+    export TMUX
+  fi
+fi
+if [ -z "$TARGET_PANE" ] && [ -z "$TMUX_PANE" ]; then
+  TARGET_PANE=$(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' 2>/dev/null \
+    | grep -i 'claude\|node\|bun' | head -1 | awk '{print $1}')
+  [ -z "$TARGET_PANE" ] && TARGET_PANE=$(tmux display-message -p '#{pane_id}' 2>/dev/null)
+fi
+
 # ── 日志 ──
 LOG_FILE="$HOME/.claude/notifier.log"
