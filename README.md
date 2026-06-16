@@ -108,6 +108,43 @@ When Claude finishes, you get a rich notification with the project name, working
 2. **TIOCSTI ioctl** (fallback)
 3. **Notification-only** (if neither available)
 
+---
+
+### Hook Subprocess Loses tmux Environment Variables
+
+**Problem**: Claude Code executes `notify.sh` as a hook subprocess. This subprocess may not inherit `$TMUX` and `$TMUX_PANE` environment variables, resulting in:
+
+```
+remote-approve | no TTY and no tmux pane found, skip polling
+```
+
+**Solution**: Add dynamic detection to `~/.claude/notifier.conf`:
+
+```bash
+# ── tmux (hook subprocess may lose TMUX/TMUX_PANE, auto-detect) ──
+if [ -z "$TMUX" ]; then
+  _tmux_sock=$(find /tmp/tmux-$(id -u)/ -type s 2>/dev/null | head -1)
+  if [ -n "$_tmux_sock" ]; then
+    _tmux_pid=$(tmux -S "$_tmux_sock" display-message -p '#{pid}' 2>/dev/null)
+    TMUX="${_tmux_sock},${_tmux_pid:-0},0"
+    export TMUX
+  fi
+fi
+if [ -z "$TARGET_PANE" ] && [ -z "$TMUX_PANE" ]; then
+  TARGET_PANE=$(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' 2>/dev/null \
+    | grep -i 'claude\|node\|bun' | head -1 | awk '{print $1}')
+  [ -z "$TARGET_PANE" ] && TARGET_PANE=$(tmux display-message -p '#{pane_id}' 2>/dev/null)
+fi
+```
+
+This config is portable — copy to any new server without modification. Logic:
+
+1. If `$TMUX` exists (normal case) → use it directly
+2. If missing → auto-discover the current user's tmux socket and rebuild the variable
+3. If neither `$TARGET_PANE` nor `$TMUX_PANE` exist → find the pane running claude/node/bun
+
+---
+
 **Multi-Channel** — Enable one or more simultaneously:
 - **Feishu** — Webhook (group bot) or App (personal), with interactive cards
 - **ServerChan** — Push to WeChat
@@ -292,6 +329,40 @@ server {
 
 ---
 
+### Split Deployment
+
+When Claude Code runs on an internal/cloud server (e.g., AWS) that cannot be directly accessed by your phone, you can deploy the approval server separately on a publicly accessible machine.
+
+**Architecture**:
+
+```
+┌─ Internal Server (Claude Code) ─┐    ┌─ Public Server (Approval) ─┐    ┌─ Phone ─┐
+│                                  │    │                            │    │         │
+│ notify.sh ──outbound POST────→   │ ─→ │ Flask:9120                 │ ←─ │ Feishu  │
+│            ──outbound poll────→  │ ─→ │ (approval page)            │ ─→ │ approve │
+│ tmux inject ← gets result        │    │                            │    │         │
+└──────────────────────────────────┘    └────────────────────────────┘    └─────────┘
+```
+
+**Key points**:
+- Internal server only needs outbound network — no inbound ports required
+- Approval page is on the public server — phone accesses it directly
+- Multiple Claude Code instances can share one approval server (distinguished by hostname)
+
+**Internal server config**:
+
+```bash
+# ~/.claude/notifier.conf
+USE_REMOTE_APPROVE=1
+APPROVE_SERVER="https://your-public-domain.com"   # points to remote approval server
+APPROVE_INTERVAL=3
+APPROVE_EXPIRE=300
+```
+
+**Public server**: only needs `approve-server/` deployed with Nginx + HTTPS.
+
+---
+
 ## API Reference
 
 | Endpoint | Method | Description |
@@ -323,6 +394,7 @@ server {
 | `APPROVE_SERVER` | - | Server URL |
 | `APPROVE_INTERVAL` | `3` | Poll interval (s) |
 | `APPROVE_EXPIRE` | `300` | Request expiry + poll timeout (s) |
+| `TARGET_PANE` | (auto-detect) | Force a specific tmux pane ID (e.g., `%1`) for cases where hook subprocesses cannot auto-detect |
 | `LOG_FILE` | `~/.claude/notifier.log` | Log path |
 
 | Env Variable | Description |
